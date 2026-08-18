@@ -1,9 +1,9 @@
 {
-  "name": "mug-mockup-3d",
+"name": "Mockup",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-"homepage": "https://genesisgns91.github.io/Mockup/",
+  "homepage": "https://genesisgns91.github.io/Mockup/",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
