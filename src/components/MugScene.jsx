@@ -38,9 +38,9 @@ function BackgroundImage({ url }) {
 
 const TARGET_HEIGHT = 1.7 // world units a single mug's height should occupy
 const MODEL_URLS = {
-  1: '/model.obj',
-  2: '/model-duo.obj',
-  3: '/model-trio.obj',
+  1: `${import.meta.env.BASE_URL}model.obj`,
+  2: `${import.meta.env.BASE_URL}model-duo.obj`,
+  3: `${import.meta.env.BASE_URL}model-trio.obj`,
 }
 
 // Shared "ceramic" PBR tuning used for every part of the mug (body, handle,
