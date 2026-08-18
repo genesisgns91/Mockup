@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/Mockup/', // <-- Nome exato do seu repositório no GitHub
+  base: './', // <-- Altere de '/Mockup/' para './'
 })
