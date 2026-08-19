@@ -4,12 +4,15 @@ import ControlsPanel from './components/ControlsPanel.jsx'
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
+
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+
   document.body.appendChild(a)
   a.click()
   a.remove()
+
   setTimeout(() => URL.revokeObjectURL(url), 2000)
 }
 
@@ -35,6 +38,7 @@ export default function App() {
     handle: '#ffffff',
     inside: '#ffffff',
   })
+
   const [mugCount, setMugCount] = useState(1)
   const [warning, setWarning] = useState(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -49,11 +53,15 @@ export default function App() {
 
   const handleScreenshot = () => {
     if (!apiRef.current) return
+
     setExportError(null)
+
     const dataUrl = apiRef.current.screenshot(3)
+
     const a = document.createElement('a')
     a.href = dataUrl
     a.download = 'mockup-caneca.png'
+
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -61,19 +69,28 @@ export default function App() {
 
   const handleRecord = () => {
     if (!apiRef.current || isRecording) return
+
     setExportError(null)
     setIsRecording(true)
+
     apiRef.current.startRecording((blob, mimeType, error) => {
       setIsRecording(false)
+
       if (error || !blob) {
         setExportError(error || 'Não foi possível gravar o vídeo.')
         return
       }
+
       const isMp4 = mimeType && mimeType.includes('mp4')
-      downloadBlob(blob, isMp4 ? 'mockup-caneca.mp4' : 'mockup-caneca.webm')
+
+      downloadBlob(
+        blob,
+        isMp4 ? 'mockup-caneca.mp4' : 'mockup-caneca.webm'
+      )
+
       if (!isMp4) {
         setExportError(
-          'Seu navegador não suporta gravação direta em MP4; o vídeo foi salvo em WebM (você pode converter para MP4 em qualquer conversor online, sem perda de qualidade).'
+          'Seu navegador não suporta gravação direta em MP4. O vídeo foi salvo em WebM.'
         )
       }
     })
@@ -81,36 +98,171 @@ export default function App() {
 
   return (
     <div className="app">
-      <ControlsPanel
-        art={art}
-        setArt={setArt}
-        background={background}
-        setBackground={setBackground}
-        mugColors={mugColors}
-        setMugColors={setMugColors}
-        mugCount={mugCount}
-        setMugCount={setMugCount}
-        warning={warning}
-      />
-      <main className="stage">
-        <div className="viewport">
-          <MugScene
-            art={{ ...art, onWarning: setWarning }}
-            background={background}
-            mugColors={mugColors}
-            mugCount={mugCount}
-            registerApi={registerApi}
-            spinTargetRef={spinTargetRef}
-          />
+
+      {/* =========================
+          BARRA SUPERIOR
+      ========================== */}
+
+      <header className="topbar">
+
+        <div className="brand">
+          <div className="brand-mark">
+            M
+          </div>
+
+          <div className="brand-info">
+            <strong>Mockup 3D</strong>
+            <span>Canecas</span>
+          </div>
         </div>
-        <div className="toolbar">
-          <button onClick={handleScreenshot}>📷 Salvar imagem (PNG, alta qualidade)</button>
-          <button onClick={handleRecord} disabled={isRecording}>
-            {isRecording ? '🎥 Gravando...' : '🎥 Salvar vídeo 360° (MP4)'}
-          </button>
+
+        <div className="topbar-status">
+          <span className="status-dot" />
+          <span>Editor ativo</span>
         </div>
-        {exportError && <p className="export-note">{exportError}</p>}
-      </main>
+
+      </header>
+
+
+      {/* =========================
+          ÁREA PRINCIPAL
+      ========================== */}
+
+      <div className="workspace">
+
+        <ControlsPanel
+          art={art}
+          setArt={setArt}
+          background={background}
+          setBackground={setBackground}
+          mugColors={mugColors}
+          setMugColors={setMugColors}
+          mugCount={mugCount}
+          setMugCount={setMugCount}
+          warning={warning}
+        />
+
+
+        {/* =========================
+            CANVAS / CENA 3D
+        ========================== */}
+
+        <main className="stage">
+
+          <div className="stage-header">
+
+            <div>
+              <span className="stage-eyebrow">
+                VISUALIZAÇÃO
+              </span>
+
+              <h1>
+                Mockup da sua caneca
+              </h1>
+            </div>
+
+            <div className="scene-info">
+              <span>
+                {mugCount} {mugCount === 1 ? 'caneca' : 'canecas'}
+              </span>
+            </div>
+
+          </div>
+
+
+          <div className="viewport-wrapper">
+
+            <div className="viewport">
+
+              <MugScene
+                art={{
+                  ...art,
+                  onWarning: setWarning,
+                }}
+                background={background}
+                mugColors={mugColors}
+                mugCount={mugCount}
+                registerApi={registerApi}
+                spinTargetRef={spinTargetRef}
+              />
+
+              <div className="viewport-hint">
+                <span className="mouse-icon">↔</span>
+                Arraste para girar
+                <span className="hint-separator">•</span>
+                Scroll para aproximar
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* =========================
+              EXPORTAÇÃO
+          ========================== */}
+
+          <div className="export-area">
+
+            <div className="export-title">
+              <span>EXPORTAR MOCKUP</span>
+              <small>Alta qualidade</small>
+            </div>
+
+            <div className="toolbar">
+
+              <button
+                className="action-button primary"
+                onClick={handleScreenshot}
+              >
+                <span className="button-icon">↓</span>
+
+                <span>
+                  <strong>Salvar PNG</strong>
+                  <small>Imagem em alta resolução</small>
+                </span>
+              </button>
+
+
+              <button
+                className="action-button secondary"
+                onClick={handleRecord}
+                disabled={isRecording}
+              >
+                <span className="button-icon">
+                  {isRecording ? '●' : '▶'}
+                </span>
+
+                <span>
+                  <strong>
+                    {isRecording
+                      ? 'Gravando...'
+                      : 'Vídeo 360°'}
+                  </strong>
+
+                  <small>
+                    {isRecording
+                      ? 'Aguarde a gravação terminar'
+                      : 'Exportar apresentação'}
+                  </small>
+                </span>
+              </button>
+
+            </div>
+
+            {exportError && (
+              <div className="export-note">
+                <span>!</span>
+                {exportError}
+              </div>
+            )}
+
+          </div>
+
+        </main>
+
+      </div>
+
     </div>
   )
 }
