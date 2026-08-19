@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import MugScene from './components/MugScene.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
 
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob)
 
@@ -13,8 +14,12 @@ function downloadBlob(blob, filename) {
   a.click()
   a.remove()
 
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  setTimeout(
+    () => URL.revokeObjectURL(url),
+    2000
+  )
 }
+
 
 export default function App() {
   const [art, setArt] = useState({
@@ -27,11 +32,13 @@ export default function App() {
     mugRealHeightMM: 95,
   })
 
+
   const [background, setBackground] = useState({
     type: 'color',
     color: '#F3ECE3',
     image: null,
   })
+
 
   const [mugColors, setMugColors] = useState({
     body: '#ffffff',
@@ -39,66 +46,115 @@ export default function App() {
     inside: '#ffffff',
   })
 
-  const [mugCount, setMugCount] = useState(1)
-  const [warning, setWarning] = useState(null)
-  const [isRecording, setIsRecording] = useState(false)
-  const [exportError, setExportError] = useState(null)
+
+  /*
+    NOVO:
+    Controle de brilho das canecas.
+
+    0 = fosco
+    1 = brilho máximo
+  */
+  const [mugShine, setMugShine] =
+    useState(0.5)
+
+
+  const [modelId, setModelId] =
+    useState('single')
+
+  const [warning, setWarning] =
+    useState(null)
+
+  const [isRecording, setIsRecording] =
+    useState(false)
+
+  const [exportError, setExportError] =
+    useState(null)
+
 
   const apiRef = useRef(null)
-  const spinTargetRef = useRef(null)
 
-  const registerApi = useCallback((api) => {
-    apiRef.current = api
-  }, [])
+  const spinTargetRef =
+    useRef(null)
+
+
+  const registerApi =
+    useCallback((api) => {
+      apiRef.current = api
+    }, [])
+
 
   const handleScreenshot = () => {
     if (!apiRef.current) return
 
     setExportError(null)
 
-    const dataUrl = apiRef.current.screenshot(3)
+    const dataUrl =
+      apiRef.current.screenshot(3)
 
-    const a = document.createElement('a')
+    const a =
+      document.createElement('a')
+
     a.href = dataUrl
-    a.download = 'mockup-caneca.png'
+    a.download =
+      'mockup-caneca.png'
 
     document.body.appendChild(a)
     a.click()
     a.remove()
   }
 
+
   const handleRecord = () => {
-    if (!apiRef.current || isRecording) return
+    if (
+      !apiRef.current ||
+      isRecording
+    ) {
+      return
+    }
 
     setExportError(null)
     setIsRecording(true)
 
-    apiRef.current.startRecording((blob, mimeType, error) => {
-      setIsRecording(false)
-
-      if (error || !blob) {
-        setExportError(
-          error || 'Não foi possível gravar o vídeo.'
-        )
-        return
-      }
-
-      const isMp4 = mimeType && mimeType.includes('mp4')
-
-      downloadBlob(
+    apiRef.current.startRecording(
+      (
         blob,
-        isMp4
-          ? 'mockup-caneca.mp4'
-          : 'mockup-caneca.webm'
-      )
+        mimeType,
+        error
+      ) => {
+        setIsRecording(false)
 
-      if (!isMp4) {
-        setExportError(
-          'Seu navegador não suporta MP4 diretamente. O vídeo foi salvo em WebM.'
+        if (
+          error ||
+          !blob
+        ) {
+          setExportError(
+            error ||
+            'Não foi possível gravar o vídeo.'
+          )
+
+          return
+        }
+
+        const isMp4 =
+          mimeType &&
+          mimeType.includes('mp4')
+
+        downloadBlob(
+          blob,
+          isMp4
+            ? 'mockup-caneca.mp4'
+            : 'mockup-caneca.webm'
         )
+
+        if (!isMp4) {
+          setExportError(
+            'Seu navegador não suporta MP4 diretamente. O vídeo foi salvo em WebM.'
+          )
+        }
       }
-    })
+    )
   }
+
 
   return (
     <div className="app">
@@ -133,8 +189,11 @@ export default function App() {
         <div className="header-right">
 
           <span className="editor-status">
+
             <span className="status-dot" />
+
             Editor
+
           </span>
 
         </div>
@@ -148,15 +207,23 @@ export default function App() {
 
       <div className="workspace">
 
+
         <ControlsPanel
           art={art}
           setArt={setArt}
+
           background={background}
           setBackground={setBackground}
+
           mugColors={mugColors}
           setMugColors={setMugColors}
-          mugCount={mugCount}
-          setMugCount={setMugCount}
+
+          mugShine={mugShine}
+          setMugShine={setMugShine}
+
+          modelId={modelId}
+          setModelId={setModelId}
+
           warning={warning}
         />
 
@@ -181,11 +248,21 @@ export default function App() {
 
             </div>
 
+
             <div className="scene-badge">
-              {mugCount}{' '}
-              {mugCount === 1
-                ? 'caneca'
-                : 'canecas'}
+
+              {modelId === 'single' &&
+                '1 caneca'}
+
+              {modelId === 'duo' &&
+                '2 canecas'}
+
+              {modelId === 'trio' &&
+                '3 canecas'}
+
+              {modelId === 'trioPaper' &&
+                '3 canecas + folha'}
+
             </div>
 
           </div>
@@ -200,12 +277,20 @@ export default function App() {
                   ...art,
                   onWarning: setWarning,
                 }}
+
                 background={background}
+
                 mugColors={mugColors}
-                mugCount={mugCount}
+
+                mugShine={mugShine}
+
+                modelId={modelId}
+
                 registerApi={registerApi}
+
                 spinTargetRef={spinTargetRef}
               />
+
 
               <div className="viewport-help">
 
@@ -248,6 +333,7 @@ export default function App() {
 
               </div>
 
+
               <div className="ink-mark">
                 ✦
               </div>
@@ -256,6 +342,7 @@ export default function App() {
 
 
             <div className="export-actions">
+
 
               <button
                 className="btn btn-primary export-button"
@@ -288,15 +375,21 @@ export default function App() {
               >
 
                 <span className="button-symbol">
-                  {isRecording ? '●' : '▶'}
+
+                  {isRecording
+                    ? '●'
+                    : '▶'}
+
                 </span>
 
                 <span>
 
                   <strong>
+
                     {isRecording
                       ? 'Gravando...'
                       : 'Vídeo 360°'}
+
                   </strong>
 
                   <small>
@@ -307,14 +400,20 @@ export default function App() {
 
               </button>
 
+
             </div>
 
 
             {exportError && (
 
               <div className="export-note">
-                <span>!</span>
+
+                <span>
+                  !
+                </span>
+
                 {exportError}
+
               </div>
 
             )}

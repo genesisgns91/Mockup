@@ -1,5 +1,6 @@
 import { useState } from 'react'
 
+
 function Section({
   icon,
   title,
@@ -65,8 +66,12 @@ export default function ControlsPanel({
   setBackground,
   mugColors,
   setMugColors,
-  mugCount,
-  setMugCount,
+
+  mugShine,
+  setMugShine,
+
+  modelId,
+  setModelId,
   warning,
 }) {
 
@@ -85,13 +90,11 @@ export default function ControlsPanel({
     const img = new Image()
 
     img.onload = () => {
-
       setArt((a) => ({
         ...a,
         image: img,
         fileName: file.name,
       }))
-
     }
 
     img.src = url
@@ -111,6 +114,30 @@ export default function ControlsPanel({
       image: url,
     })
   }
+
+
+  const models = [
+    {
+      id: 'single',
+      number: '1',
+      label: 'Caneca',
+    },
+    {
+      id: 'duo',
+      number: '2',
+      label: 'Canecas',
+    },
+    {
+      id: 'trio',
+      number: '3',
+      label: 'Canecas',
+    },
+    {
+      id: 'trioPaper',
+      number: '3',
+      label: 'Canecas + Folha',
+    },
+  ]
 
 
   return (
@@ -144,32 +171,30 @@ export default function ControlsPanel({
       <Section
         icon="▣"
         title="Modelo"
-        description="Quantidade de canecas"
+        description="Escolha o modelo de caneca"
       >
 
         <div className="mug-selector">
 
-          {[1, 2, 3].map((count) => (
+          {models.map((model) => (
 
             <button
-              key={count}
+              key={model.id}
               type="button"
               className={
-                mugCount === count
+                modelId === model.id
                   ? 'mug-option active'
                   : 'mug-option'
               }
-              onClick={() => setMugCount(count)}
+              onClick={() => setModelId(model.id)}
             >
 
               <span className="mug-number">
-                {count}
+                {model.number}
               </span>
 
               <span>
-                {count === 1
-                  ? 'Caneca'
-                  : 'Canecas'}
+                {model.label}
               </span>
 
             </button>
@@ -717,6 +742,52 @@ export default function ControlsPanel({
           </label>
 
         </div>
+
+
+        {/* ==================================================
+            BRILHO DA CANECA
+        ================================================== */}
+
+        <div className="range-field">
+
+          <div className="range-header">
+
+            <span>
+              Brilho da caneca
+            </span>
+
+            <strong>
+              {Math.round(mugShine * 100)}%
+            </strong>
+
+          </div>
+
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={mugShine}
+            onChange={(e) =>
+              setMugShine(
+                Number(e.target.value)
+              )
+            }
+          />
+
+          <div className="range-limits">
+            <span>Fosco</span>
+            <span>Brilhante</span>
+          </div>
+
+        </div>
+
+
+        <p className="control-hint">
+          O brilho afeta apenas o acabamento das canecas.
+          A folha permanece fosca.
+        </p>
+
 
         <p className="control-hint">
           O corpo também define a cor das áreas onde
