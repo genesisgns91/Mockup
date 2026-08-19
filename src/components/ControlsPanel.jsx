@@ -25,17 +25,23 @@ function Section({
           </span>
 
           <div>
-            <strong>{title}</strong>
+
+            <strong>
+              {title}
+            </strong>
 
             {description && (
-              <small>{description}</small>
+              <small>
+                {description}
+              </small>
             )}
+
           </div>
 
         </div>
 
         <span className="section-arrow">
-          {open ? '⌃' : '⌄'}
+          {open ? '−' : '+'}
         </span>
 
       </button>
@@ -64,10 +70,12 @@ export default function ControlsPanel({
   warning,
 }) {
 
-  const [showCalibration, setShowCalibration] = useState(false)
+  const [showCalibration, setShowCalibration] =
+    useState(false)
 
 
   const handleArtUpload = (e) => {
+
     const file = e.target.files?.[0]
 
     if (!file) return
@@ -77,11 +85,13 @@ export default function ControlsPanel({
     const img = new Image()
 
     img.onload = () => {
+
       setArt((a) => ({
         ...a,
         image: img,
         fileName: file.name,
       }))
+
     }
 
     img.src = url
@@ -89,6 +99,7 @@ export default function ControlsPanel({
 
 
   const handleBgImageUpload = (e) => {
+
     const file = e.target.files?.[0]
 
     if (!file) return
@@ -105,32 +116,30 @@ export default function ControlsPanel({
   return (
     <aside className="panel">
 
-      {/* =========================
-          PAINEL HEADER
-      ========================== */}
+      {/* ==================================================
+          CABEÇALHO DO PAINEL
+      ================================================== */}
 
-      <div className="panel-header">
+      <div className="panel-heading">
 
-        <div>
-          <span className="panel-eyebrow">
-            CONFIGURAÇÕES
-          </span>
+        <span className="section-kicker">
+          PERSONALIZAÇÃO
+        </span>
 
-          <h2>
-            Personalizar
-          </h2>
-        </div>
+        <h2>
+          Seu mockup
+        </h2>
 
-        <div className="panel-version">
-          3D
-        </div>
+        <p>
+          Configure a caneca e visualize o resultado em 3D.
+        </p>
 
       </div>
 
 
-      {/* =========================
+      {/* ==================================================
           MODELO
-      ========================== */}
+      ================================================== */}
 
       <Section
         icon="▣"
@@ -172,9 +181,9 @@ export default function ControlsPanel({
       </Section>
 
 
-      {/* =========================
+      {/* ==================================================
           ARTE
-      ========================== */}
+      ================================================== */}
 
       <Section
         icon="✦"
@@ -243,15 +252,25 @@ export default function ControlsPanel({
         <div className="field-group">
 
           <div className="field-label">
-            <span>Tamanho da arte</span>
-            <small>milímetros</small>
+
+            <span>
+              Tamanho da arte
+            </span>
+
+            <small>
+              milímetros
+            </small>
+
           </div>
+
 
           <div className="input-grid">
 
             <label className="input-field">
 
-              <span>Largura</span>
+              <span>
+                Largura
+              </span>
 
               <div className="number-input">
 
@@ -263,12 +282,16 @@ export default function ControlsPanel({
                   onChange={(e) =>
                     setArt((a) => ({
                       ...a,
-                      widthMM: Number(e.target.value),
+                      widthMM: Number(
+                        e.target.value
+                      ),
                     }))
                   }
                 />
 
-                <span>mm</span>
+                <span>
+                  mm
+                </span>
 
               </div>
 
@@ -277,7 +300,9 @@ export default function ControlsPanel({
 
             <label className="input-field">
 
-              <span>Altura</span>
+              <span>
+                Altura
+              </span>
 
               <div className="number-input">
 
@@ -289,12 +314,16 @@ export default function ControlsPanel({
                   onChange={(e) =>
                     setArt((a) => ({
                       ...a,
-                      heightMM: Number(e.target.value),
+                      heightMM: Number(
+                        e.target.value
+                      ),
                     }))
                   }
                 />
 
-                <span>mm</span>
+                <span>
+                  mm
+                </span>
 
               </div>
 
@@ -305,7 +334,7 @@ export default function ControlsPanel({
         </div>
 
 
-        {/* POSIÇÃO HORIZONTAL */}
+        {/* HORIZONTAL */}
 
         <div className="range-field">
 
@@ -323,13 +352,15 @@ export default function ControlsPanel({
 
           <input
             type="range"
-            min={-60}
-            max={60}
+            min="-60"
+            max="60"
             value={art.offsetXMM}
             onChange={(e) =>
               setArt((a) => ({
                 ...a,
-                offsetXMM: Number(e.target.value),
+                offsetXMM: Number(
+                  e.target.value
+                ),
               }))
             }
           />
@@ -343,7 +374,7 @@ export default function ControlsPanel({
         </div>
 
 
-        {/* POSIÇÃO VERTICAL */}
+        {/* VERTICAL */}
 
         <div className="range-field">
 
@@ -361,13 +392,15 @@ export default function ControlsPanel({
 
           <input
             type="range"
-            min={-20}
-            max={20}
+            min="-20"
+            max="20"
             value={art.offsetYMM}
             onChange={(e) =>
               setArt((a) => ({
                 ...a,
-                offsetYMM: Number(e.target.value),
+                offsetYMM: Number(
+                  e.target.value
+                ),
               }))
             }
           />
@@ -396,7 +429,7 @@ export default function ControlsPanel({
           </span>
 
           <span>
-            {showCalibration ? '⌃' : '⌄'}
+            {showCalibration ? '−' : '+'}
           </span>
 
         </button>
@@ -422,23 +455,25 @@ export default function ControlsPanel({
                   onChange={(e) =>
                     setArt((a) => ({
                       ...a,
-                      mugRealHeightMM: Number(
-                        e.target.value
-                      ),
+                      mugRealHeightMM:
+                        Number(
+                          e.target.value
+                        ),
                     }))
                   }
                 />
 
-                <span>mm</span>
+                <span>
+                  mm
+                </span>
 
               </div>
 
             </label>
 
             <p>
-              Informe a altura real da parede da sua
-              caneca. Isso mantém a escala da arte
-              proporcional ao tamanho físico.
+              Ajuste conforme a altura real da parede
+              da sua caneca para manter a escala da arte.
             </p>
 
           </div>
@@ -450,9 +485,12 @@ export default function ControlsPanel({
 
           <div className="warning">
 
-            <span>!</span>
+            <span>
+              !
+            </span>
 
             <div>
+
               <strong>
                 Atenção
               </strong>
@@ -460,6 +498,7 @@ export default function ControlsPanel({
               <p>
                 {warning}
               </p>
+
             </div>
 
           </div>
@@ -469,9 +508,9 @@ export default function ControlsPanel({
       </Section>
 
 
-      {/* =========================
+      {/* ==================================================
           FUNDO
-      ========================== */}
+      ================================================== */}
 
       <Section
         icon="◉"
@@ -581,9 +620,9 @@ export default function ControlsPanel({
       </Section>
 
 
-      {/* =========================
-          CORES DA CANECA
-      ========================== */}
+      {/* ==================================================
+          CORES
+      ================================================== */}
 
       <Section
         icon="●"
@@ -679,29 +718,16 @@ export default function ControlsPanel({
 
         </div>
 
-
         <p className="control-hint">
-          O corpo também define a cor das áreas
-          onde não existe impressão.
+          O corpo também define a cor das áreas onde
+          não existe impressão.
         </p>
 
       </Section>
 
 
       <div className="panel-footer">
-
-        <span>
-          Mockup 3D
-        </span>
-
-        <span>
-          •
-        </span>
-
-        <span>
-          Editor
-        </span>
-
+        Almatiê · Mockup 3D
       </div>
 
     </aside>

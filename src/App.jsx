@@ -29,7 +29,7 @@ export default function App() {
 
   const [background, setBackground] = useState({
     type: 'color',
-    color: '#e7e2da',
+    color: '#F3ECE3',
     image: null,
   })
 
@@ -77,7 +77,9 @@ export default function App() {
       setIsRecording(false)
 
       if (error || !blob) {
-        setExportError(error || 'Não foi possível gravar o vídeo.')
+        setExportError(
+          error || 'Não foi possível gravar o vídeo.'
+        )
         return
       }
 
@@ -85,12 +87,14 @@ export default function App() {
 
       downloadBlob(
         blob,
-        isMp4 ? 'mockup-caneca.mp4' : 'mockup-caneca.webm'
+        isMp4
+          ? 'mockup-caneca.mp4'
+          : 'mockup-caneca.webm'
       )
 
       if (!isMp4) {
         setExportError(
-          'Seu navegador não suporta gravação direta em MP4. O vídeo foi salvo em WebM.'
+          'Seu navegador não suporta MP4 diretamente. O vídeo foi salvo em WebM.'
         )
       }
     })
@@ -99,34 +103,48 @@ export default function App() {
   return (
     <div className="app">
 
-      {/* =========================
-          BARRA SUPERIOR
-      ========================== */}
+      {/* ==================================================
+          CABEÇALHO
+      ================================================== */}
 
-      <header className="topbar">
+      <header className="site-header">
 
-        <div className="brand">
-          <div className="brand-mark">
-            M
+        <div className="brand-container">
+
+          <div className="brand-symbol">
+            A
           </div>
 
-          <div className="brand-info">
-            <strong>Mockup 3D</strong>
-            <span>Canecas</span>
+          <div className="brand">
+
+            <h1>
+              Almatiê
+            </h1>
+
+            <span>
+              Mockup 3D de Canecas
+            </span>
+
           </div>
+
         </div>
 
-        <div className="topbar-status">
-          <span className="status-dot" />
-          <span>Editor ativo</span>
+
+        <div className="header-right">
+
+          <span className="editor-status">
+            <span className="status-dot" />
+            Editor
+          </span>
+
         </div>
 
       </header>
 
 
-      {/* =========================
+      {/* ==================================================
           ÁREA PRINCIPAL
-      ========================== */}
+      ================================================== */}
 
       <div className="workspace">
 
@@ -143,34 +161,37 @@ export default function App() {
         />
 
 
-        {/* =========================
-            CANVAS / CENA 3D
-        ========================== */}
+        {/* ==================================================
+            ÁREA 3D
+        ================================================== */}
 
         <main className="stage">
 
           <div className="stage-header">
 
             <div>
-              <span className="stage-eyebrow">
-                VISUALIZAÇÃO
+
+              <span className="section-kicker">
+                CRIADOR DE MOCKUP
               </span>
 
-              <h1>
-                Mockup da sua caneca
-              </h1>
+              <h2>
+                Visualização 3D
+              </h2>
+
             </div>
 
-            <div className="scene-info">
-              <span>
-                {mugCount} {mugCount === 1 ? 'caneca' : 'canecas'}
-              </span>
+            <div className="scene-badge">
+              {mugCount}{' '}
+              {mugCount === 1
+                ? 'caneca'
+                : 'canecas'}
             </div>
 
           </div>
 
 
-          <div className="viewport-wrapper">
+          <div className="viewport-card">
 
             <div className="viewport">
 
@@ -186,11 +207,20 @@ export default function App() {
                 spinTargetRef={spinTargetRef}
               />
 
-              <div className="viewport-hint">
-                <span className="mouse-icon">↔</span>
+              <div className="viewport-help">
+
+                <span className="help-icon">
+                  ↔
+                </span>
+
                 Arraste para girar
-                <span className="hint-separator">•</span>
+
+                <span className="help-divider">
+                  •
+                </span>
+
                 Scroll para aproximar
+
               </div>
 
             </div>
@@ -198,42 +228,71 @@ export default function App() {
           </div>
 
 
-          {/* =========================
+          {/* ==================================================
               EXPORTAÇÃO
-          ========================== */}
+          ================================================== */}
 
-          <div className="export-area">
+          <div className="export-card">
 
-            <div className="export-title">
-              <span>EXPORTAR MOCKUP</span>
-              <small>Alta qualidade</small>
-            </div>
+            <div className="export-heading">
 
-            <div className="toolbar">
-
-              <button
-                className="action-button primary"
-                onClick={handleScreenshot}
-              >
-                <span className="button-icon">↓</span>
+              <div>
 
                 <span>
-                  <strong>Salvar PNG</strong>
-                  <small>Imagem em alta resolução</small>
+                  FINALIZE SEU MOCKUP
                 </span>
+
+                <strong>
+                  Exporte sua criação
+                </strong>
+
+              </div>
+
+              <div className="ink-mark">
+                ✦
+              </div>
+
+            </div>
+
+
+            <div className="export-actions">
+
+              <button
+                className="btn btn-primary export-button"
+                onClick={handleScreenshot}
+              >
+
+                <span className="button-symbol">
+                  ↓
+                </span>
+
+                <span>
+
+                  <strong>
+                    Salvar PNG
+                  </strong>
+
+                  <small>
+                    Imagem em alta qualidade
+                  </small>
+
+                </span>
+
               </button>
 
 
               <button
-                className="action-button secondary"
+                className="btn btn-secondary export-button"
                 onClick={handleRecord}
                 disabled={isRecording}
               >
-                <span className="button-icon">
+
+                <span className="button-symbol">
                   {isRecording ? '●' : '▶'}
                 </span>
 
                 <span>
+
                   <strong>
                     {isRecording
                       ? 'Gravando...'
@@ -241,20 +300,23 @@ export default function App() {
                   </strong>
 
                   <small>
-                    {isRecording
-                      ? 'Aguarde a gravação terminar'
-                      : 'Exportar apresentação'}
+                    Apresentação animada
                   </small>
+
                 </span>
+
               </button>
 
             </div>
 
+
             {exportError && (
+
               <div className="export-note">
                 <span>!</span>
                 {exportError}
               </div>
+
             )}
 
           </div>
