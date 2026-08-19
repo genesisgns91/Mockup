@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react'
-import MugScene from './components/MugScene.jsx'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import MugScene, { ROTATE_SECONDS } from './components/MugScene.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
 
 
@@ -17,6 +17,221 @@ function downloadBlob(blob, filename) {
   setTimeout(
     () => URL.revokeObjectURL(url),
     2000
+  )
+}
+
+
+/*
+  ==========================================================
+  FORMATOS DE EXPORTAÇÃO
+
+  "free" mantém o comportamento original (tamanho do
+  viewport). Os demais recortam a imagem/vídeo final para
+  encaixar perfeitamente nas redes sociais, em alta
+  qualidade (1080px no lado maior).
+  ==========================================================
+*/
+const EXPORT_FORMATS = [
+  {
+    id: 'free',
+    label: 'Livre',
+    hint: 'Tamanho original',
+    width: null,
+    height: null,
+  },
+  {
+    id: 'square',
+    label: 'Quadrado',
+    hint: '1080×1080 · Feed',
+    width: 1080,
+    height: 1080,
+  },
+  {
+    id: 'portrait',
+    label: 'Retrato',
+    hint: '1080×1350 · Feed',
+    width: 1080,
+    height: 1350,
+  },
+  {
+    id: 'story',
+    label: 'Story',
+    hint: '1080×1920 · Stories/Reels/TikTok',
+    width: 1080,
+    height: 1920,
+  },
+]
+
+
+/*
+  ==========================================================
+  GUIA DE CORTE
+
+  Sobrepõe ao viewport 3D um recorte que mostra exatamente
+  a área que será mantida na exportação final, para o
+  usuário compor a cena antes de salvar.
+  ==========================================================
+*/
+function CropGuideOverlay({ containerRef, format }) {
+  const [box, setBox] = useState(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+
+    if (!el || !format) {
+      setBox(null)
+      return undefined
+    }
+
+    const compute = () => {
+      const rect = el.getBoundingClientRect()
+
+      if (!rect.width || !rect.height) return
+
+      const targetAspect =
+        format.width / format.height
+
+      const containerAspect =
+        rect.width / rect.height
+
+      let w
+      let h
+
+      if (targetAspect < containerAspect) {
+        h = rect.height
+        w = rect.height * targetAspect
+      } else {
+        w = rect.width
+        h = rect.width / targetAspect
+      }
+
+      setBox({ w, h })
+    }
+
+    compute()
+
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+
+    return () => ro.disconnect()
+  }, [containerRef, format])
+
+  if (!format || !box) return null
+
+  return (
+    <div className="crop-guide">
+      <div
+        className="crop-guide-frame"
+        style={{
+          width: `${box.w}px`,
+          height: `${box.h}px`,
+        }}
+      >
+        <span className="crop-guide-tag">
+          {format.hint}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+
+/*
+  ==========================================================
+  MODAL DE PRÉVIA
+
+  Mostra o resultado final (imagem ou vídeo, já no formato
+  e recorte escolhidos) antes de confirmar o download.
+  ==========================================================
+*/
+function ExportPreviewModal({ data, onClose, onConfirm }) {
+  if (!data) return null
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+
+      <div
+        className="modal-card"
+        onClick={(e) => e.stopPropagation()}
+      >
+
+        <div className="modal-header">
+
+          <div>
+            <span className="section-kicker">
+              PRÉVIA
+            </span>
+
+            <h3>
+              {data.type === 'video'
+                ? 'Seu vídeo está pronto'
+                : 'Sua imagem está pronta'}
+            </h3>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            ×
+          </button>
+
+        </div>
+
+
+        <div className="modal-preview">
+
+          {data.type === 'video' ? (
+
+            <video
+              src={data.url}
+              controls
+              autoPlay
+              loop
+              muted
+              playsInline
+            />
+
+          ) : (
+
+            <img
+              src={data.url}
+              alt="Prévia do mockup"
+            />
+
+          )}
+
+        </div>
+
+
+        <div className="modal-actions">
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={onClose}
+          >
+            Descartar
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={onConfirm}
+          >
+            <span className="button-symbol">
+              ↓
+            </span>
+            Baixar {data.type === 'video' ? 'vídeo' : 'imagem'}
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
   )
 }
 
@@ -67,13 +282,40 @@ export default function App() {
   const [isRecording, setIsRecording] =
     useState(false)
 
+  const [recordProgress, setRecordProgress] =
+    useState(0)
+
   const [exportError, setExportError] =
     useState(null)
+
+
+  /*
+    NOVO:
+    Formato de exportação (proporção) e
+    opção de fundo transparente para PNG.
+  */
+  const [exportFormatId, setExportFormatId] =
+    useState('free')
+
+  const [transparentBg, setTransparentBg] =
+    useState(false)
+
+  const [previewModal, setPreviewModal] =
+    useState(null)
+
+
+  const activeFormat =
+    EXPORT_FORMATS.find(
+      (f) => f.id === exportFormatId
+    ) || EXPORT_FORMATS[0]
 
 
   const apiRef = useRef(null)
 
   const spinTargetRef =
+    useRef(null)
+
+  const viewportRef =
     useRef(null)
 
 
@@ -83,24 +325,43 @@ export default function App() {
     }, [])
 
 
+  const buildFileName = (ext) => {
+    const formatSuffix =
+      activeFormat.id !== 'free'
+        ? `-${activeFormat.id}`
+        : ''
+
+    const transparencySuffix =
+      ext === 'png' && transparentBg
+        ? '-transparente'
+        : ''
+
+    return `mockup-caneca${formatSuffix}${transparencySuffix}.${ext}`
+  }
+
+
   const handleScreenshot = () => {
     if (!apiRef.current) return
 
     setExportError(null)
 
+    const format =
+      activeFormat.width
+        ? activeFormat
+        : null
+
     const dataUrl =
-      apiRef.current.screenshot(3)
+      apiRef.current.screenshot({
+        multiplier: 3,
+        transparent: transparentBg,
+        format,
+      })
 
-    const a =
-      document.createElement('a')
-
-    a.href = dataUrl
-    a.download =
-      'mockup-caneca.png'
-
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
+    setPreviewModal({
+      type: 'image',
+      url: dataUrl,
+      filename: buildFileName('png'),
+    })
   }
 
 
@@ -114,6 +375,25 @@ export default function App() {
 
     setExportError(null)
     setIsRecording(true)
+    setRecordProgress(0)
+
+    const format =
+      activeFormat.width
+        ? activeFormat
+        : null
+
+    const startTime = Date.now()
+
+    const progressTimer = setInterval(() => {
+      const elapsed = Date.now() - startTime
+
+      setRecordProgress(
+        Math.min(
+          100,
+          (elapsed / (ROTATE_SECONDS * 1000)) * 100
+        )
+      )
+    }, 100)
 
     apiRef.current.startRecording(
       (
@@ -121,7 +401,9 @@ export default function App() {
         mimeType,
         error
       ) => {
+        clearInterval(progressTimer)
         setIsRecording(false)
+        setRecordProgress(0)
 
         if (
           error ||
@@ -139,20 +421,62 @@ export default function App() {
           mimeType &&
           mimeType.includes('mp4')
 
-        downloadBlob(
+        setPreviewModal({
+          type: 'video',
+          url: URL.createObjectURL(blob),
           blob,
-          isMp4
-            ? 'mockup-caneca.mp4'
-            : 'mockup-caneca.webm'
-        )
-
-        if (!isMp4) {
-          setExportError(
-            'Seu navegador não suporta MP4 diretamente. O vídeo foi salvo em WebM.'
-          )
-        }
-      }
+          isMp4,
+          filename: buildFileName(
+            isMp4 ? 'mp4' : 'webm'
+          ),
+        })
+      },
+      { format }
     )
+  }
+
+
+  const handleClosePreview = () => {
+    if (
+      previewModal?.type === 'video' &&
+      previewModal.url
+    ) {
+      URL.revokeObjectURL(previewModal.url)
+    }
+
+    setPreviewModal(null)
+  }
+
+
+  const handleConfirmDownload = () => {
+    if (!previewModal) return
+
+    if (previewModal.type === 'image') {
+
+      const a = document.createElement('a')
+      a.href = previewModal.url
+      a.download = previewModal.filename
+
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+
+    } else {
+
+      downloadBlob(
+        previewModal.blob,
+        previewModal.filename
+      )
+
+      if (!previewModal.isMp4) {
+        setExportError(
+          'Seu navegador não suporta MP4 diretamente. O vídeo foi salvo em WebM.'
+        )
+      }
+
+    }
+
+    handleClosePreview()
   }
 
 
@@ -270,7 +594,10 @@ export default function App() {
 
           <div className="viewport-card">
 
-            <div className="viewport">
+            <div
+              className="viewport"
+              ref={viewportRef}
+            >
 
               <MugScene
                 art={{
@@ -289,6 +616,16 @@ export default function App() {
                 registerApi={registerApi}
 
                 spinTargetRef={spinTargetRef}
+              />
+
+
+              <CropGuideOverlay
+                containerRef={viewportRef}
+                format={
+                  activeFormat.width
+                    ? activeFormat
+                    : null
+                }
               />
 
 
@@ -337,6 +674,94 @@ export default function App() {
               <div className="ink-mark">
                 ✦
               </div>
+
+            </div>
+
+
+            {/* ==================================================
+                FORMATO DE EXPORTAÇÃO
+            ================================================== */}
+
+            <div className="format-selector">
+
+              <div className="format-selector-heading">
+                <strong>
+                  Formato de exportação
+                </strong>
+
+                <small>
+                  Escolha a proporção ideal para cada rede social
+                </small>
+              </div>
+
+
+              <div className="format-options">
+
+                {EXPORT_FORMATS.map((format) => (
+
+                  <button
+                    key={format.id}
+                    type="button"
+                    className={
+                      exportFormatId === format.id
+                        ? 'format-option active'
+                        : 'format-option'
+                    }
+                    onClick={() =>
+                      setExportFormatId(format.id)
+                    }
+                  >
+
+                    <span
+                      className={`format-shape shape-${format.id}`}
+                    />
+
+                    <span className="format-option-text">
+                      <strong>
+                        {format.label}
+                      </strong>
+
+                      <small>
+                        {format.hint}
+                      </small>
+                    </span>
+
+                  </button>
+
+                ))}
+
+              </div>
+
+
+              <label className="transparent-toggle">
+
+                <span className="transparent-toggle-text">
+                  <strong>
+                    Fundo transparente
+                  </strong>
+
+                  <small>
+                    Remove o fundo da imagem (apenas PNG)
+                  </small>
+                </span>
+
+                <span className="switch">
+
+                  <input
+                    type="checkbox"
+                    checked={transparentBg}
+                    onChange={(e) =>
+                      setTransparentBg(e.target.checked)
+                    }
+                  />
+
+                  <span className="switch-track">
+                    <span className="switch-thumb" />
+                  </span>
+
+                </span>
+
+              </label>
 
             </div>
 
@@ -404,6 +829,18 @@ export default function App() {
             </div>
 
 
+            {isRecording && (
+
+              <div className="record-progress">
+                <div
+                  className="record-progress-fill"
+                  style={{ width: `${recordProgress}%` }}
+                />
+              </div>
+
+            )}
+
+
             {exportError && (
 
               <div className="export-note">
@@ -423,6 +860,13 @@ export default function App() {
         </main>
 
       </div>
+
+
+      <ExportPreviewModal
+        data={previewModal}
+        onClose={handleClosePreview}
+        onConfirm={handleConfirmDownload}
+      />
 
     </div>
   )

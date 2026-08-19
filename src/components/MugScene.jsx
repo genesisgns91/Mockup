@@ -71,6 +71,13 @@ function BackgroundImage({ url }) {
 
 const TARGET_HEIGHT = 1.7
 
+/*
+  Duração da animação de giro 360°
+  usada tanto no player 3D quanto
+  na barra de progresso da UI.
+*/
+export const ROTATE_SECONDS = 6
+
 
 const MODEL_URLS = {
   single:
@@ -89,6 +96,58 @@ const MODEL_URLS = {
 
 function baseName(name) {
   return name.replace(/\.\d+$/, '')
+}
+
+
+/*
+  ==========================================================
+  RECORTE PARA FORMATOS SOCIAIS (1:1, 4:5, 9:16...)
+
+  Recebe o canvas já renderizado e devolve um novo canvas
+  no tamanho exato do formato escolhido, recortando o
+  excedente do lado mais longo (comportamento "cover",
+  igual ao usado no guia visual mostrado ao usuário).
+  ==========================================================
+*/
+function cropCanvasToTarget(sourceCanvas, targetWidth, targetHeight) {
+  const sw = sourceCanvas.width
+  const sh = sourceCanvas.height
+
+  if (!sw || !sh) return sourceCanvas
+
+  const sourceAspect = sw / sh
+  const targetAspect = targetWidth / targetHeight
+
+  let cropW
+  let cropH
+  let cropX
+  let cropY
+
+  if (sourceAspect > targetAspect) {
+    cropH = sh
+    cropW = sh * targetAspect
+    cropX = (sw - cropW) / 2
+    cropY = 0
+  } else {
+    cropW = sw
+    cropH = sw / targetAspect
+    cropX = 0
+    cropY = (sh - cropH) / 2
+  }
+
+  const output = document.createElement('canvas')
+  output.width = targetWidth
+  output.height = targetHeight
+
+  const ctx = output.getContext('2d')
+  ctx.clearRect(0, 0, targetWidth, targetHeight)
+  ctx.drawImage(
+    sourceCanvas,
+    cropX, cropY, cropW, cropH,
+    0, 0, targetWidth, targetHeight
+  )
+
+  return output
 }
 
 
@@ -619,9 +678,6 @@ function Mug({
 }
 
 
-const ROTATE_SECONDS = 6
-
-
 function CameraRig({ frame }) {
   const {
     camera,
@@ -755,11 +811,38 @@ function CaptureRig({
   useEffect(() => {
     registerApi({
 
-      screenshot: (
-        multiplier = 3
-      ) => {
+      /*
+        ======================================================
+        SCREENSHOT
+
+        options.multiplier   -> fator de super-resolução
+        options.transparent  -> remove o fundo (PNG com alfa)
+        options.format       -> { width, height } para recorte
+                                 em formato social. null = livre
+        ======================================================
+      */
+      screenshot: (options = {}) => {
+        const {
+          multiplier = 3,
+          transparent = false,
+          format = null,
+        } = options
+
         const prevRatio =
           gl.getPixelRatio()
+
+        const prevBackground =
+          scene.background
+
+        const prevClearColor =
+          new THREE.Color()
+
+        gl.getClearColor(
+          prevClearColor
+        )
+
+        const prevClearAlpha =
+          gl.getClearAlpha()
 
         const targetRatio =
           Math.min(
@@ -777,16 +860,47 @@ function CaptureRig({
           false
         )
 
+        if (transparent) {
+          scene.background = null
+          gl.setClearColor(0x000000, 0)
+        }
+
         gl.render(
           scene,
           camera
         )
 
+        let outputCanvas =
+          gl.domElement
+
+        if (
+          format &&
+          format.width &&
+          format.height
+        ) {
+          outputCanvas =
+            cropCanvasToTarget(
+              gl.domElement,
+              format.width,
+              format.height
+            )
+        }
+
         const dataUrl =
-          gl.domElement.toDataURL(
+          outputCanvas.toDataURL(
             'image/png',
             1.0
           )
+
+        if (transparent) {
+          scene.background =
+            prevBackground
+
+          gl.setClearColor(
+            prevClearColor,
+            prevClearAlpha
+          )
+        }
 
         gl.setPixelRatio(
           prevRatio
@@ -807,12 +921,68 @@ function CaptureRig({
       },
 
 
-      startRecording: (onDone) => {
+      /*
+        ======================================================
+        GRAVAÇÃO DE VÍDEO 360°
+
+        options.format -> { width, height } para gravar já
+                           recortado no formato social. Faz a
+                           composição frame a frame em um
+                           canvas 2D auxiliar, sem afetar a
+                           visualização ao vivo do usuário.
+        ======================================================
+      */
+      startRecording: (
+        onDone,
+        options = {}
+      ) => {
+        const { format = null } = options
+
         const canvas =
           gl.domElement
 
+        let streamSource = canvas
+        let compositeCanvas = null
+        let compositeCtx = null
+        let compositeRafId = null
+
+        if (
+          format &&
+          format.width &&
+          format.height
+        ) {
+          compositeCanvas =
+            document.createElement(
+              'canvas'
+            )
+
+          compositeCanvas.width =
+            format.width
+
+          compositeCanvas.height =
+            format.height
+
+          compositeCtx =
+            compositeCanvas.getContext(
+              '2d'
+            )
+
+          streamSource =
+            compositeCanvas
+        }
+
+        if (!streamSource.captureStream) {
+          onDone(
+            null,
+            null,
+            'Seu navegador não suporta gravação de vídeo.'
+          )
+
+          return
+        }
+
         const stream =
-          canvas.captureStream(30)
+          streamSource.captureStream(30)
 
         const candidates = [
           'video/mp4;codecs=avc1.42E01E',
@@ -868,8 +1038,21 @@ function CaptureRig({
         }
 
 
+        const stopCompositeLoop = () => {
+          if (compositeRafId) {
+            cancelAnimationFrame(
+              compositeRafId
+            )
+
+            compositeRafId = null
+          }
+        }
+
+
         recorder.onstop = () => {
           recordingRef.current = false
+
+          stopCompositeLoop()
 
           if (
             spinTargetRef.current
@@ -902,6 +1085,60 @@ function CaptureRig({
           spinTargetRef.current
         ) {
           spinTargetRef.current.rotation.y = 0
+        }
+
+
+        if (compositeCanvas) {
+          const drawFrame = () => {
+            const sw = canvas.width
+            const sh = canvas.height
+
+            if (sw && sh) {
+              const sourceAspect =
+                sw / sh
+
+              const targetAspect =
+                format.width /
+                format.height
+
+              let cropW
+              let cropH
+              let cropX
+              let cropY
+
+              if (
+                sourceAspect >
+                targetAspect
+              ) {
+                cropH = sh
+                cropW =
+                  sh * targetAspect
+                cropX =
+                  (sw - cropW) / 2
+                cropY = 0
+              } else {
+                cropW = sw
+                cropH =
+                  sw / targetAspect
+                cropX = 0
+                cropY =
+                  (sh - cropH) / 2
+              }
+
+              compositeCtx.drawImage(
+                canvas,
+                cropX, cropY, cropW, cropH,
+                0, 0, format.width, format.height
+              )
+            }
+
+            compositeRafId =
+              requestAnimationFrame(
+                drawFrame
+              )
+          }
+
+          drawFrame()
         }
 
 
@@ -962,6 +1199,10 @@ export default function MugScene({
         toneMappingExposure: 1.1,
 
         preserveDrawingBuffer: true,
+
+        alpha: true,
+
+        premultipliedAlpha: false,
       }}
     >
 
