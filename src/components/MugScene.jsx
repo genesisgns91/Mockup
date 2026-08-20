@@ -627,70 +627,9 @@ function CameraRig({ frame }) {
     controls,
   } = useThree()
 
-  /*
-    Controla se o usuario ja mexeu manualmente na
-    camera (arrastar para girar ou usar o scroll
-    para dar zoom no viewport). A partir do
-    primeiro toque do usuario, paramos de
-    reenquadrar a camera automaticamente.
-
-    Isso evita que um simples redimensionamento do
-    canvas -- causado por coisas que nao tem nada a
-    ver com a caneca, como a barra de rolagem da
-    pagina aparecer/mudar ao usar a rodinha do
-    mouse, ou o teclado virtual abrir no celular --
-    resete a posicao que o usuario ja tinha
-    ajustado.
-  */
-  const userInteractedRef =
-    useRef(false)
-
-  const lastFrameRef =
-    useRef(null)
-
-
-  useEffect(() => {
-    if (!controls) return undefined
-
-    const handleInteractionStart = () => {
-      userInteractedRef.current = true
-    }
-
-    controls.addEventListener(
-      'start',
-      handleInteractionStart
-    )
-
-    return () => {
-      controls.removeEventListener(
-        'start',
-        handleInteractionStart
-      )
-    }
-  }, [controls])
-
 
   useEffect(() => {
     if (!frame) return
-
-    /*
-      "frame" so recebe uma referencia nova quando
-      uma caneca de verdade termina de carregar
-      (troca de modelo). Se o frame e o mesmo de
-      antes e o usuario ja interagiu manualmente,
-      um redimensionamento do canvas nao deve mais
-      mexer na camera.
-    */
-    const isNewFrame =
-      lastFrameRef.current !== frame
-
-    lastFrameRef.current = frame
-
-    if (isNewFrame) {
-      userInteractedRef.current = false
-    } else if (userInteractedRef.current) {
-      return
-    }
 
     const fovRad =
       (
@@ -773,12 +712,24 @@ function CameraRig({ frame }) {
       controls.update()
     }
 
-  }, [
-    frame,
-    camera,
-    size,
-    controls,
-  ])
+    /*
+      BUGFIX:
+      Esse efeito reposiciona a câmera para o
+      enquadramento padrão. Antes, ele também rodava
+      de novo sempre que "size" (tamanho do canvas)
+      mudava — e no celular, rolar a página esconde/
+      mostra a barra de endereço do navegador, o que
+      dispara um resize do canvas e resetava qualquer
+      ajuste manual que o usuário tivesse feito na
+      posição da caneca.
+
+      Agora o reposicionamento só acontece quando
+      "frame" muda de verdade (ou seja, quando o
+      modelo de caneca é trocado). camera/size/controls
+      continuam sendo lidos normalmente aqui dentro,
+      só não fazem o efeito rodar de novo sozinhos.
+    */
+  }, [frame]) // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return null

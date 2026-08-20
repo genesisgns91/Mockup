@@ -1,5 +1,67 @@
 import { useEffect, useRef, useState } from 'react'
 import { clamp01, getImageLayout } from '../utils/exportLayout.js'
+import { useToast } from './Toast.jsx'
+
+
+/*
+  ==========================================================
+  PALETAS RÁPIDAS
+
+  Combinações prontas para quem só quer um resultado bonito
+  sem precisar entender de teoria das cores. Um clique
+  aplica cor de fundo + cores da caneca juntas.
+  ==========================================================
+*/
+const QUICK_PALETTES = [
+  {
+    id: 'areia',
+    label: 'Areia',
+    background: '#F3ECE3',
+    body: '#ffffff',
+    handle: '#ffffff',
+    inside: '#ffffff',
+  },
+  {
+    id: 'terracota',
+    label: 'Terracota',
+    background: '#E7C9B4',
+    body: '#ffffff',
+    handle: '#C2532F',
+    inside: '#C2532F',
+  },
+  {
+    id: 'noturno',
+    label: 'Noturno',
+    background: '#1B1230',
+    body: '#151024',
+    handle: '#D6336C',
+    inside: '#151024',
+  },
+  {
+    id: 'menta',
+    label: 'Menta',
+    background: '#DFF3EC',
+    body: '#ffffff',
+    handle: '#0E8FA3',
+    inside: '#ffffff',
+  },
+  {
+    id: 'monocromo',
+    label: 'Monocromo',
+    background: '#ffffff',
+    body: '#ffffff',
+    handle: '#ffffff',
+    inside: '#ffffff',
+  },
+]
+
+
+/*
+  Resolução mínima recomendada (px por mm) para a arte sair
+  nítida na impressão/exportação. Abaixo disso, avisamos o
+  usuário em vez de deixar ele descobrir só no resultado final.
+*/
+const MIN_PX_PER_MM = 8
 
 
 function Section({
@@ -18,11 +80,12 @@ function Section({
         type="button"
         className="section-header"
         onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
       >
 
         <div className="section-title">
 
-          <span className="section-icon">
+          <span className="section-icon" aria-hidden="true">
             {icon}
           </span>
 
@@ -42,7 +105,7 @@ function Section({
 
         </div>
 
-        <span className="section-arrow">
+        <span className="section-arrow" aria-hidden="true">
           {open ? '−' : '+'}
         </span>
 
@@ -238,34 +301,69 @@ export default function ControlsPanel({
   const [showCalibration, setShowCalibration] =
     useState(false)
 
+  const [artDragActive, setArtDragActive] =
+    useState(false)
 
-  const handleArtUpload = (e) => {
+  const [bgDragActive, setBgDragActive] =
+    useState(false)
 
-    const file = e.target.files?.[0]
+  const toast = useToast()
+
+
+  const processArtFile = (file) => {
 
     if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Envie um arquivo de imagem (PNG, JPG ou WEBP).')
+      return
+    }
 
     const url = URL.createObjectURL(file)
 
     const img = new Image()
 
     img.onload = () => {
-      setArt((a) => ({
-        ...a,
-        image: img,
-        fileName: file.name,
-      }))
+      setArt((a) => {
+
+        /*
+          Avisa quando a imagem enviada tem poucos pixels
+          para o tamanho físico configurado — evita que o
+          usuário só descubra a baixa qualidade depois de
+          exportar.
+        */
+        const pxPerMm = Math.min(
+          img.naturalWidth / a.widthMM,
+          img.naturalHeight / a.heightMM
+        )
+
+        if (pxPerMm < MIN_PX_PER_MM) {
+          toast.warning(
+            'A imagem enviada tem resolução baixa para o tamanho configurado — pode sair borrada na impressão.',
+            { duration: 6000 }
+          )
+        }
+
+        return {
+          ...a,
+          image: img,
+          fileName: file.name,
+        }
+      })
     }
 
     img.src = url
   }
 
 
-  const handleBgImageUpload = (e) => {
-
-    const file = e.target.files?.[0]
+  const processBackgroundFile = (file) => {
 
     if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Envie um arquivo de imagem (PNG, JPG ou WEBP).')
+      return
+    }
 
     const url = URL.createObjectURL(file)
 
@@ -285,6 +383,57 @@ export default function ControlsPanel({
       offsetYFrac: 0.5,
     }))
   }
+
+
+  const handleArtUpload = (e) => {
+    processArtFile(e.target.files?.[0])
+  }
+
+
+  const handleBgImageUpload = (e) => {
+    processBackgroundFile(e.target.files?.[0])
+  }
+
+
+  /*
+    Handlers de arrastar-e-soltar, reaproveitados pelas duas
+    áreas de upload (arte e fundo). Só previne o comportamento
+    padrão do navegador (abrir o arquivo) e repassa para o
+    processamento normal.
+  */
+  const makeDropHandlers = (setActive, processFile) => ({
+    onDragOver: (e) => {
+      e.preventDefault()
+      setActive(true)
+    },
+    onDragLeave: (e) => {
+      e.preventDefault()
+      setActive(false)
+    },
+    onDrop: (e) => {
+      e.preventDefault()
+      setActive(false)
+      processFile(e.dataTransfer.files?.[0])
+    },
+  })
+
+  const artDropHandlers = makeDropHandlers(setArtDragActive, processArtFile)
+  const bgDropHandlers = makeDropHandlers(setBgDragActive, processBackgroundFile)
+
+
+  /*
+    Progresso geral de configuração, mostrado no topo do
+    painel para deixar claro o que já foi feito e o que
+    falta — reduz a sensação de "por onde eu começo?".
+  */
+  const steps = [
+    { id: 'model', label: 'Modelo', done: Boolean(modelId) },
+    { id: 'art', label: 'Arte', done: Boolean(art.fileName) },
+    { id: 'background', label: 'Fundo', done: background.type === 'image' ? Boolean(background.image) : true },
+    { id: 'colors', label: 'Cores', done: true },
+  ]
+
+  const completedSteps = steps.filter((s) => s.done).length
 
 
   const models = [
@@ -331,6 +480,31 @@ export default function ControlsPanel({
         <p>
           Configure a caneca e visualize o resultado em 3D.
         </p>
+
+
+        <div className="progress-track" role="list" aria-label="Etapas de configuração">
+
+          {steps.map((step, index) => (
+
+            <div
+              key={step.id}
+              role="listitem"
+              className={`progress-step${step.done ? ' done' : ''}`}
+            >
+
+              <span className="progress-dot">
+                {step.done ? '✓' : index + 1}
+              </span>
+
+              <span className="progress-label">
+                {step.label}
+              </span>
+
+            </div>
+
+          ))}
+
+        </div>
 
       </div>
 
@@ -387,7 +561,10 @@ export default function ControlsPanel({
         description="Imagem e posicionamento"
       >
 
-        <label className="upload-area">
+        <label
+          className={`upload-area${artDragActive ? ' drag-active' : ''}`}
+          {...artDropHandlers}
+        >
 
           <input
             type="file"
@@ -435,7 +612,7 @@ export default function ControlsPanel({
               </strong>
 
               <span>
-                PNG, JPG ou WEBP
+                Arraste aqui ou clique · PNG, JPG ou WEBP
               </span>
 
             </div>
@@ -540,9 +717,27 @@ export default function ControlsPanel({
               Posição horizontal
             </span>
 
-            <strong>
-              {art.offsetXMM} mm
-            </strong>
+            <span className="range-header-actions">
+
+              <strong>
+                {art.offsetXMM} mm
+              </strong>
+
+              {art.offsetXMM !== 0 && (
+                <button
+                  type="button"
+                  className="range-reset"
+                  onClick={() =>
+                    setArt((a) => ({ ...a, offsetXMM: 0 }))
+                  }
+                  aria-label="Centralizar posição horizontal"
+                  title="Centralizar"
+                >
+                  ⟲
+                </button>
+              )}
+
+            </span>
 
           </div>
 
@@ -580,9 +775,27 @@ export default function ControlsPanel({
               Posição vertical
             </span>
 
-            <strong>
-              {art.offsetYMM} mm
-            </strong>
+            <span className="range-header-actions">
+
+              <strong>
+                {art.offsetYMM} mm
+              </strong>
+
+              {art.offsetYMM !== 0 && (
+                <button
+                  type="button"
+                  className="range-reset"
+                  onClick={() =>
+                    setArt((a) => ({ ...a, offsetYMM: 0 }))
+                  }
+                  aria-label="Centralizar posição vertical"
+                  title="Centralizar"
+                >
+                  ⟲
+                </button>
+              )}
+
+            </span>
 
           </div>
 
@@ -786,7 +999,10 @@ export default function ControlsPanel({
 
           <>
 
-            <label className="upload-area small">
+            <label
+              className={`upload-area small${bgDragActive ? ' drag-active' : ''}`}
+              {...bgDropHandlers}
+            >
 
               <input
                 type="file"
@@ -834,7 +1050,7 @@ export default function ControlsPanel({
                   </strong>
 
                   <span>
-                    Use uma foto ou cenário
+                    Arraste aqui ou clique · foto ou cenário
                   </span>
 
                 </div>
@@ -996,6 +1212,64 @@ export default function ControlsPanel({
         defaultOpen={false}
       >
 
+        <div className="field-label">
+
+          <span>
+            Paletas rápidas
+          </span>
+
+          <small>
+            um clique aplica fundo + caneca
+          </small>
+
+        </div>
+
+        <div className="palette-row">
+
+          {QUICK_PALETTES.map((palette) => (
+
+            <button
+              key={palette.id}
+              type="button"
+              className="palette-swatch"
+              title={palette.label}
+              aria-label={`Aplicar paleta ${palette.label}`}
+              onClick={() => {
+                setBackground((b) => ({
+                  ...b,
+                  type: 'color',
+                  color: palette.background,
+                }))
+
+                setMugColors({
+                  body: palette.body,
+                  handle: palette.handle,
+                  inside: palette.inside,
+                })
+              }}
+            >
+
+              <span
+                className="palette-swatch-half"
+                style={{ background: palette.background }}
+              />
+
+              <span
+                className="palette-swatch-half"
+                style={{ background: palette.body }}
+              />
+
+              <span className="palette-swatch-label">
+                {palette.label}
+              </span>
+
+            </button>
+
+          ))}
+
+        </div>
+
+
         <div className="color-list">
 
           <label className="color-row">
@@ -1135,6 +1409,44 @@ export default function ControlsPanel({
         </p>
 
       </Section>
+
+
+      <button
+        type="button"
+        className="reset-all-button"
+        onClick={() => {
+          setArt((a) => ({
+            ...a,
+            widthMM: 210,
+            heightMM: 92,
+            offsetXMM: 0,
+            offsetYMM: 0,
+            mugRealHeightMM: 95,
+          }))
+
+          setBackground({
+            type: 'color',
+            color: '#F3ECE3',
+            image: null,
+            fit: 'cover',
+            zoom: 1,
+            offsetXFrac: 0.5,
+            offsetYFrac: 0.5,
+          })
+
+          setMugColors({
+            body: '#ffffff',
+            handle: '#ffffff',
+            inside: '#ffffff',
+          })
+
+          setMugShine(0.5)
+
+          toast.info('Configurações restauradas ao padrão.')
+        }}
+      >
+        ↺ Restaurar valores padrão
+      </button>
 
 
       <div className="panel-footer">

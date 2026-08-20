@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import MugScene, { ROTATE_SECONDS } from './components/MugScene.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
+import { useToast } from './components/Toast.jsx'
 import { clamp01, getImageLayout } from './utils/exportLayout.js'
 
 
@@ -308,6 +309,24 @@ function CropGuideOverlay({
   ==========================================================
 */
 function ExportPreviewModal({ data, onClose, onConfirm }) {
+
+  /*
+    Fecha a prévia com a tecla Esc, para quem prefere
+    teclado a mouse — comportamento padrão esperado em
+    qualquer modal.
+  */
+  useEffect(() => {
+    if (!data) return undefined
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [data, onClose])
+
   if (!data) return null
 
   return (
@@ -315,6 +334,13 @@ function ExportPreviewModal({ data, onClose, onConfirm }) {
 
       <div
         className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label={
+          data.type === 'video'
+            ? 'Seu vídeo está pronto'
+            : 'Sua imagem está pronta'
+        }
         onClick={(e) => e.stopPropagation()}
       >
 
@@ -336,7 +362,7 @@ function ExportPreviewModal({ data, onClose, onConfirm }) {
             type="button"
             className="modal-close"
             onClick={onClose}
-            aria-label="Fechar"
+            aria-label="Fechar prévia"
           >
             ×
           </button>
@@ -400,6 +426,16 @@ function ExportPreviewModal({ data, onClose, onConfirm }) {
 
 
 export default function App() {
+  const toast = useToast()
+
+  /*
+    Estado de "processando" só para dar feedback visual
+    imediato no botão de PNG — a geração em si é rápida,
+    mas sem isso o clique parece não ter feito nada.
+  */
+  const [isExportingImage, setIsExportingImage] =
+    useState(false)
+
   const [art, setArt] = useState({
     image: null,
     fileName: null,
@@ -600,9 +636,10 @@ const [videoEffect, setVideoEffect] =
 
 
   const handleScreenshot = () => {
-    if (!apiRef.current) return
+    if (!apiRef.current || isExportingImage) return
 
     setExportError(null)
+    setIsExportingImage(true)
 
     const format =
       activeFormat.width
@@ -614,20 +651,34 @@ const [videoEffect, setVideoEffect] =
         ? null
         : buildBackgroundOptions()
 
-    const dataUrl =
-      apiRef.current.screenshot({
-        multiplier: 3,
-        transparent: transparentBg,
-        format,
-        backgroundOptions,
-        cropOffsetXFrac,
-        cropOffsetYFrac,
-      })
+    /*
+      requestAnimationFrame dá tempo do navegador pintar o
+      estado "Gerando..." antes do trabalho síncrono do
+      screenshot travar a thread principal por um instante.
+    */
+    requestAnimationFrame(() => {
+      try {
+        const dataUrl =
+          apiRef.current.screenshot({
+            multiplier: 3,
+            transparent: transparentBg,
+            format,
+            backgroundOptions,
+            cropOffsetXFrac,
+            cropOffsetYFrac,
+          })
 
-    setPreviewModal({
-      type: 'image',
-      url: dataUrl,
-      filename: buildFileName('png'),
+        setPreviewModal({
+          type: 'image',
+          url: dataUrl,
+          filename: buildFileName('png'),
+        })
+      } catch {
+        setExportError('Não foi possível gerar a imagem. Tente novamente.')
+        toast.error('Não foi possível gerar a imagem.')
+      } finally {
+        setIsExportingImage(false)
+      }
     })
   }
 
@@ -691,10 +742,12 @@ const [videoEffect, setVideoEffect] =
           error ||
           !blob
         ) {
-          setExportError(
+          const message =
             error ||
             'Não foi possível gravar o vídeo.'
-          )
+
+          setExportError(message)
+          toast.error(message)
   
           return
         }
@@ -757,6 +810,8 @@ const [videoEffect, setVideoEffect] =
       a.click()
       a.remove()
 
+      toast.success('Imagem baixada com sucesso!')
+
     } else {
 
       downloadBlob(
@@ -768,6 +823,9 @@ const [videoEffect, setVideoEffect] =
         setExportError(
           'Seu navegador não suporta MP4 diretamente. O vídeo foi salvo em WebM.'
         )
+        toast.warning('Vídeo salvo em WebM (seu navegador não suporta MP4 direto).')
+      } else {
+        toast.success('Vídeo baixado com sucesso!')
       }
 
     }
@@ -1314,16 +1372,18 @@ const [videoEffect, setVideoEffect] =
               <button
                 className="btn btn-primary export-button"
                 onClick={handleScreenshot}
+                disabled={isExportingImage}
+                aria-busy={isExportingImage}
               >
 
                 <span className="button-symbol">
-                  ↓
+                  {isExportingImage ? '⟳' : '↓'}
                 </span>
 
                 <span>
 
                   <strong>
-                    Salvar PNG
+                    {isExportingImage ? 'Gerando...' : 'Salvar PNG'}
                   </strong>
 
                   <small>

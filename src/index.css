@@ -1404,16 +1404,6 @@ input[type="range"]::-moz-range-thumb {
 
   overflow-y: auto;
   overflow-x: hidden;
-
-  /*
-    Reserva sempre o espaço da barra de rolagem
-    (mesmo quando o conteúdo ainda não estoura),
-    para que ela nunca apareça/suma durante o
-    scroll. Isso evita uma mudança de largura do
-    canvas 3D nesse momento, que fazia a câmera
-    ser reenquadrada e "resetar" a posição.
-  */
-  scrollbar-gutter: stable;
 }
 
 
@@ -2874,4 +2864,381 @@ input[type="range"]::-moz-range-thumb {
     animation-duration: 0.01ms !important;
   }
 
+}
+
+/* =========================================================
+   MELHORIAS DE UI/UX — TOASTS
+========================================================= */
+
+.toast-stack {
+
+  position: fixed;
+
+  top: 18px;
+  right: 18px;
+
+  z-index: 999;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
+
+  max-width: 340px;
+
+  pointer-events: none;
+}
+
+
+.toast {
+
+  display: flex;
+  align-items: flex-start;
+
+  gap: 9px;
+
+  padding: 11px 13px;
+
+  border-radius: var(--radius-sm);
+
+  background: var(--surface);
+
+  box-shadow: var(--shadow-lg);
+
+  border: 1px solid var(--border);
+
+  font-size: 0.72rem;
+  line-height: 1.45;
+
+  color: var(--text);
+
+  cursor: pointer;
+
+  pointer-events: auto;
+
+  animation: toast-in 220ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+
+@keyframes toast-in {
+
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+}
+
+
+.toast-icon {
+
+  flex-shrink: 0;
+
+  width: 18px;
+  height: 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  font-size: 0.62rem;
+  font-weight: 800;
+
+  color: #fff;
+}
+
+
+.toast-success .toast-icon { background: #16A34A; }
+.toast-error .toast-icon { background: var(--danger); }
+.toast-warning .toast-icon { background: #C58A2E; }
+.toast-info .toast-icon { background: var(--secondary-accent); }
+
+.toast-success { border-color: #BEE8CE; }
+.toast-error { border-color: #F3C6C6; }
+.toast-warning { border-color: #F0D9B8; }
+.toast-info { border-color: var(--secondary-soft); }
+
+
+@media (max-width: 700px) {
+
+  .toast-stack {
+
+    top: auto;
+    bottom: 18px;
+
+    left: 12px;
+    right: 12px;
+
+    max-width: none;
+  }
+
+}
+
+
+/* =========================================================
+   MELHORIAS DE UI/UX — TRILHA DE PROGRESSO
+========================================================= */
+
+.progress-track {
+
+  display: flex;
+
+  gap: 6px;
+
+  margin-top: 14px;
+}
+
+
+.progress-step {
+
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: 5px;
+
+  font-size: 0.6rem;
+
+  color: var(--text-muted);
+}
+
+
+.progress-dot {
+
+  width: 22px;
+  height: 22px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  border: 1.5px solid var(--border);
+
+  background: var(--surface);
+
+  font-size: 0.62rem;
+  font-weight: 700;
+
+  color: var(--text-muted);
+
+  transition: var(--transition);
+}
+
+
+.progress-step.done .progress-dot {
+
+  border-color: var(--primary);
+
+  background: var(--primary);
+
+  color: #fff;
+}
+
+
+.progress-step.done .progress-label {
+
+  color: var(--text);
+
+  font-weight: 600;
+}
+
+
+.progress-label {
+
+  text-align: center;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   MELHORIAS DE UI/UX — ARRASTAR E SOLTAR
+========================================================= */
+
+.upload-area.drag-active {
+
+  border-color: var(--primary);
+  border-style: solid;
+
+  background: var(--primary-soft);
+
+  transform: scale(1.01);
+}
+
+
+/* =========================================================
+   MELHORIAS DE UI/UX — RESET RÁPIDO NOS SLIDERS
+========================================================= */
+
+.range-header-actions {
+
+  display: flex;
+  align-items: center;
+
+  gap: 6px;
+}
+
+
+.range-reset {
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 20px;
+  height: 20px;
+
+  border: none;
+  border-radius: 999px;
+
+  background: var(--bg-alt);
+
+  color: var(--text-muted);
+
+  font-size: 0.72rem;
+  line-height: 1;
+
+  cursor: pointer;
+
+  transition: var(--transition);
+}
+
+
+.range-reset:hover {
+
+  background: var(--primary-soft);
+
+  color: var(--primary);
+}
+
+
+/* =========================================================
+   MELHORIAS DE UI/UX — PALETAS RÁPIDAS
+========================================================= */
+
+.palette-row {
+
+  display: flex;
+
+  gap: 8px;
+
+  margin-bottom: 16px;
+
+  overflow-x: auto;
+
+  padding-bottom: 2px;
+}
+
+
+.palette-swatch {
+
+  flex-shrink: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: 5px;
+
+  padding: 4px;
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+
+  background: var(--surface);
+
+  cursor: pointer;
+
+  transition: var(--transition);
+}
+
+
+.palette-swatch:hover {
+
+  border-color: var(--primary);
+
+  transform: translateY(-1px);
+}
+
+
+.palette-swatch-half {
+
+  display: inline-block;
+
+  width: 15px;
+  height: 24px;
+}
+
+
+.palette-swatch-half:first-child {
+
+  border-radius: 5px 0 0 5px;
+}
+
+
+.palette-swatch-half:last-child {
+
+  border-radius: 0 5px 5px 0;
+
+  border-left: 1px solid rgba(27, 18, 48, 0.08);
+}
+
+
+.palette-swatch-label {
+
+  font-size: 0.56rem;
+  font-weight: 600;
+
+  color: var(--text-muted);
+}
+
+
+/* =========================================================
+   MELHORIAS DE UI/UX — RESTAURAR PADRÃO
+========================================================= */
+
+.reset-all-button {
+
+  width: 100%;
+
+  margin-top: 6px;
+
+  padding: 10px;
+
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+
+  background: transparent;
+
+  color: var(--text-muted);
+
+  font-size: 0.68rem;
+  font-weight: 600;
+
+  cursor: pointer;
+
+  transition: var(--transition);
+}
+
+
+.reset-all-button:hover {
+
+  border-color: var(--danger);
+
+  color: var(--danger);
+
+  background: var(--danger-soft);
 }
