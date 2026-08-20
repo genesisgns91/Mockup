@@ -724,62 +724,201 @@ function CameraRig({ frame }) {
 function CaptureRig({
   registerApi,
   spinTargetRef,
+  videoSpeed = 1,
+  videoEffect = 'mug',
+  videoQuality = 'standard',
 }) {
   const {
     gl,
     scene,
     camera,
     size,
+    controls,
   } = useThree()
 
-  const recordingRef =
-    useRef(false)
+  const recordingRef = useRef(false)
+  const animationProgressRef = useRef(0)
+  const recordingDurationRef = useRef(ROTATE_SECONDS)
 
+  const initialRotationRef = useRef(0)
+  const initialCameraPositionRef = useRef(
+    new THREE.Vector3()
+  )
+  const initialCameraTargetRef = useRef(
+    new THREE.Vector3()
+  )
 
   useFrame((_, delta) => {
+    if (!recordingRef.current) return
+
+    const speed =
+      Number(videoSpeed) || 1
+
+    const duration =
+      recordingDurationRef.current
+
+    animationProgressRef.current +=
+      (delta * speed) / duration
+
+    const progress =
+      Math.min(
+        1,
+        animationProgressRef.current
+      )
+
+    const startRotation =
+      initialRotationRef.current
+
+    const startCamera =
+      initialCameraPositionRef.current
+
+    const target =
+      initialCameraTargetRef.current
+
     if (
-      recordingRef.current &&
+      videoEffect === 'mug' &&
       spinTargetRef.current
     ) {
-      spinTargetRef.current.rotation.y +=
-        (
-          delta *
-          Math.PI *
-          2
-        ) /
-        ROTATE_SECONDS
+      spinTargetRef.current.rotation.y =
+        startRotation +
+        progress * Math.PI * 2
     }
-  })
 
+    if (
+      videoEffect === 'zoom'
+    ) {
+      const zoomAmount =
+        0.18 *
+        Math.sin(progress * Math.PI)
+
+      camera.position
+        .copy(startCamera)
+        .sub(target)
+        .multiplyScalar(1 - zoomAmount)
+        .add(target)
+
+      camera.lookAt(target)
+    }
+
+    if (
+      videoEffect === 'camera-up'
+    ) {
+      const offset =
+        startCamera.clone().sub(target)
+
+      const horizontalRadius =
+        Math.sqrt(
+          offset.x * offset.x +
+          offset.z * offset.z
+        )
+
+      const startAngle =
+        Math.atan2(
+          offset.z,
+          offset.x
+        )
+
+      const angle =
+        startAngle +
+        progress * Math.PI * 2
+
+      /*
+        Começa bem abaixo da caneca
+        e termina acima dela.
+      */
+      const startHeight =
+        target.y -
+        horizontalRadius * 0.75
+
+      const endHeight =
+        target.y +
+        horizontalRadius * 0.75
+
+      const height =
+        startHeight +
+        (endHeight - startHeight) *
+          progress
+
+      const radius =
+        horizontalRadius *
+        (0.82 + progress * 0.18)
+
+      /*
+        A caneca também gira junto
+        com o movimento da câmera.
+      */
+      if (spinTargetRef.current) {
+        spinTargetRef.current.rotation.y =
+          startRotation +
+          progress * Math.PI * 2
+      }
+
+      camera.position.set(
+        target.x +
+          Math.cos(angle) * radius,
+
+        height,
+
+        target.z +
+          Math.sin(angle) * radius
+      )
+
+      camera.lookAt(target)
+    }
+
+    if (
+      videoEffect === 'camera-spin'
+    ) {
+      const offset =
+        startCamera.clone()
+          .sub(target)
+
+      const angle =
+        progress * Math.PI * 2
+
+      const rotated =
+        offset.clone()
+
+      rotated.applyAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        angle
+      )
+
+      camera.position
+        .copy(target)
+        .add(rotated)
+
+      camera.lookAt(target)
+    }
+
+    if (
+      videoEffect === 'zoom-mug'
+    ) {
+      if (spinTargetRef.current) {
+        spinTargetRef.current.rotation.y =
+          startRotation +
+          progress * Math.PI * 2
+      }
+
+      const zoomAmount =
+        0.14 *
+        Math.sin(progress * Math.PI)
+
+      camera.position
+        .copy(startCamera)
+        .sub(target)
+        .multiplyScalar(1 - zoomAmount)
+        .add(target)
+
+      camera.lookAt(target)
+    }
+
+    camera.updateMatrixWorld()
+  })
 
   useEffect(() => {
     registerApi({
 
-      /*
-        ======================================================
-        SCREENSHOT
-
-        options.multiplier      -> fator de super-resolução
-        options.transparent     -> remove o fundo (PNG com alfa)
-        options.format          -> { width, height } para
-                                    recorte em formato social.
-                                    null = tamanho livre
-        options.backgroundOptions
-                                 -> { image, naturalWidth,
-                                    naturalHeight, fit, zoom,
-                                    offsetXFrac, offsetYFrac }
-                                    para compor a imagem de
-                                    fundo por baixo da caneca.
-                                    Ignorado quando transparent
-                                    é true.
-        options.cropOffsetXFrac,
-        options.cropOffsetYFrac -> deslocam o centro do
-                                    recorte do formato (0.5 =
-                                    centralizado), definidos
-                                    ao arrastar o guia de
-                                    corte no viewport.
-        ======================================================
-      */
       screenshot: (options = {}) => {
         const {
           multiplier = 3,
@@ -831,7 +970,10 @@ function CaptureRig({
           useBackgroundLayer
         ) {
           scene.background = null
-          gl.setClearColor(0x000000, 0)
+          gl.setClearColor(
+            0x000000,
+            0
+          )
         }
 
         gl.render(
@@ -842,17 +984,25 @@ function CaptureRig({
         const sourceCanvas =
           gl.domElement
 
-        const sw = sourceCanvas.width
-        const sh = sourceCanvas.height
+        const sw =
+          sourceCanvas.width
+
+        const sh =
+          sourceCanvas.height
 
         const outputWidth =
-          format ? format.width : sw
+          format
+            ? format.width
+            : sw
 
         const outputHeight =
-          format ? format.height : sh
+          format
+            ? format.height
+            : sh
 
         const targetAspect =
-          outputWidth / outputHeight
+          outputWidth /
+          outputHeight
 
         const {
           cropW,
@@ -872,8 +1022,11 @@ function CaptureRig({
             'canvas'
           )
 
-        output.width = outputWidth
-        output.height = outputHeight
+        output.width =
+          outputWidth
+
+        output.height =
+          outputHeight
 
         const octx =
           output.getContext('2d')
@@ -912,15 +1065,27 @@ function CaptureRig({
 
           octx.drawImage(
             bgLayer,
-            cropX, cropY, cropW, cropH,
-            0, 0, outputWidth, outputHeight
+            cropX,
+            cropY,
+            cropW,
+            cropH,
+            0,
+            0,
+            outputWidth,
+            outputHeight
           )
         }
 
         octx.drawImage(
           sourceCanvas,
-          cropX, cropY, cropW, cropH,
-          0, 0, outputWidth, outputHeight
+          cropX,
+          cropY,
+          cropW,
+          cropH,
+          0,
+          0,
+          outputWidth,
+          outputHeight
         )
 
         const dataUrl =
@@ -960,18 +1125,6 @@ function CaptureRig({
         return dataUrl
       },
 
-
-      /*
-        ======================================================
-        GRAVAÇÃO DE VÍDEO 360°
-
-        Mesmas opções de format/backgroundOptions/cropOffset
-        do screenshot. A composição (fundo + caneca
-        transparente + recorte) acontece quadro a quadro em
-        um canvas 2D auxiliar, sem afetar a visualização ao
-        vivo do usuário.
-        ======================================================
-      */
       startRecording: (
         onDone,
         options = {}
@@ -981,24 +1134,113 @@ function CaptureRig({
           backgroundOptions = null,
           cropOffsetXFrac = 0.5,
           cropOffsetYFrac = 0.5,
+          speed = videoSpeed,
+          effect = videoEffect,
+          quality = videoQuality,
         } = options
 
-        const canvas =
-          gl.domElement
-
-        const needsComposite =
-          !!format ||
-          !!backgroundOptions
-
-        const outputWidth =
-          format
-            ? format.width
-            : canvas.width
-
-        const outputHeight =
-          format
-            ? format.height
-            : canvas.height
+        const qualityLongSide =
+        quality === 'low'
+          ? 640
+          : quality === 'high'
+            ? 1920
+            : 1280
+      
+      const canvas =
+        gl.domElement
+      
+      const previousPixelRatio =
+        gl.getPixelRatio()
+      
+      const previousCanvasWidth =
+        canvas.width
+      
+      const previousCanvasHeight =
+        canvas.height
+      
+      /*
+        Renderiza o Three.js em resolução real de
+        exportação, e não apenas no tamanho visual
+        do viewport.
+      */
+      let outputWidth
+      let outputHeight
+      
+      if (format) {
+        const aspect =
+          format.width /
+          format.height
+      
+        if (format.width >= format.height) {
+          outputWidth =
+            quality === 'high'
+              ? 1920
+              : quality === 'standard'
+                ? 1280
+                : 640
+      
+          outputHeight =
+            Math.round(
+              outputWidth / aspect
+            )
+        } else {
+          outputHeight =
+            quality === 'high'
+              ? 1920
+              : quality === 'standard'
+                ? 1280
+                : 640
+      
+          outputWidth =
+            Math.round(
+              outputHeight * aspect
+            )
+        }
+      } else {
+        const aspect =
+          size.width / size.height
+      
+        if (size.width >= size.height) {
+          outputWidth =
+            qualityLongSide
+      
+          outputHeight =
+            Math.round(
+              outputWidth / aspect
+            )
+        } else {
+          outputHeight =
+            qualityLongSide
+      
+          outputWidth =
+            Math.round(
+              outputHeight * aspect
+            )
+        }
+      }
+      
+      /*
+        O canvas WebGL passa a ter exatamente a
+        resolução necessária para a gravação.
+      */
+      const targetPixelRatio =
+        Math.max(
+          1,
+          outputHeight / size.height,
+          outputWidth / size.width
+        )
+      
+      gl.setPixelRatio(
+        targetPixelRatio
+      )
+      
+      gl.setSize(
+        size.width,
+        size.height,
+        false
+      )
+      
+      const needsComposite = true
 
         let streamSource = canvas
         let compositeCanvas = null
@@ -1027,7 +1269,6 @@ function CaptureRig({
             compositeCanvas
         }
 
-
         const prevBackground =
           scene.background
 
@@ -1043,9 +1284,11 @@ function CaptureRig({
 
         if (backgroundOptions) {
           scene.background = null
-          gl.setClearColor(0x000000, 0)
+          gl.setClearColor(
+            0x000000,
+            0
+          )
         }
-
 
         const restoreBackground = () => {
           if (backgroundOptions) {
@@ -1059,8 +1302,9 @@ function CaptureRig({
           }
         }
 
-
-        if (!streamSource.captureStream) {
+        if (
+          !streamSource.captureStream
+        ) {
           restoreBackground()
 
           onDone(
@@ -1072,9 +1316,16 @@ function CaptureRig({
           return
         }
 
-
         const stream =
-          streamSource.captureStream(30)
+        streamSource.captureStream(30)
+      
+      const videoTrack =
+        stream.getVideoTracks()[0]
+      
+      if (videoTrack) {
+        videoTrack.contentHint =
+          'detail'
+      }
 
         const candidates = [
           'video/mp4;codecs=avc1.42E01E',
@@ -1090,7 +1341,6 @@ function CaptureRig({
               MediaRecorder.isTypeSupported(m)
           )
 
-
         if (!window.MediaRecorder) {
           restoreBackground()
 
@@ -1103,34 +1353,87 @@ function CaptureRig({
           return
         }
 
+const videoBitsPerSecond =
+  quality === 'low'
+    ? 5_000_000
+    : quality === 'high'
+      ? 24_000_000
+      : 12_000_000
 
-        const recorder =
-          new MediaRecorder(
-            stream,
-            mimeType
-              ? {
-                  mimeType,
-                  videoBitsPerSecond:
-                    10_000_000,
-                }
-              : undefined
-          )
+const recorderOptions = {
+  videoBitsPerSecond,
+}
+
+if (mimeType) {
+  recorderOptions.mimeType =
+    mimeType
+}
+
+const recorder =
+  new MediaRecorder(
+    stream,
+    recorderOptions
+  )
 
 
         const chunks = []
 
+        /*
+          IMPORTANTE:
+          salva exatamente a posição atual
+          antes da gravação.
+        */
+        const savedRotation =
+          spinTargetRef.current
+            ? spinTargetRef.current.rotation.y
+            : 0
 
-        recorder.ondataavailable = (e) => {
-          if (
-            e.data &&
-            e.data.size
-          ) {
-            chunks.push(
-              e.data
-            )
+        const savedCameraPosition =
+          camera.position.clone()
+
+        const savedCameraTarget =
+          controls
+            ? controls.target.clone()
+            : new THREE.Vector3(
+                0,
+                0,
+                0
+              )
+
+        initialRotationRef.current =
+          savedRotation
+
+        initialCameraPositionRef.current =
+          savedCameraPosition
+
+        initialCameraTargetRef.current =
+          savedCameraTarget
+
+        const normalizedSpeed =
+          [0.5, 1, 2].includes(
+            Number(speed)
+          )
+            ? Number(speed)
+            : 1
+
+        recordingDurationRef.current =
+          ROTATE_SECONDS /
+          normalizedSpeed
+
+        animationProgressRef.current =
+          0
+
+        recorder.ondataavailable =
+          (e) => {
+            if (
+              e.data &&
+              e.data.size
+            ) {
+              chunks.push(
+                e.data
+              )
+            }
           }
-        }
-
 
         const stopCompositeLoop = () => {
           if (compositeRafId) {
@@ -1142,19 +1445,51 @@ function CaptureRig({
           }
         }
 
-
         recorder.onstop = () => {
-          recordingRef.current = false
+          recordingRef.current =
+            false
 
           stopCompositeLoop()
           restoreBackground()
 
+          /*
+            Restaura exatamente a posição
+            que o usuário tinha antes.
+          */
           if (
             spinTargetRef.current
           ) {
-            spinTargetRef.current.rotation.y = 0
+            spinTargetRef.current.rotation.y =
+              savedRotation
           }
 
+          camera.position.copy(
+            savedCameraPosition
+          )
+
+          camera.lookAt(
+            savedCameraTarget
+          )
+
+          if (controls) {
+            controls.target.copy(
+              savedCameraTarget
+            )
+
+            controls.update()
+          }
+
+          camera.updateProjectionMatrix()
+          gl.setPixelRatio(
+            previousPixelRatio
+          )
+          
+          gl.setSize(
+            size.width,
+            size.height,
+            false
+          )
+          
           const blob =
             new Blob(
               chunks,
@@ -1172,131 +1507,163 @@ function CaptureRig({
           )
         }
 
+        recordingRef.current =
+          true
 
-        recordingRef.current = true
+        /*
+          NÃO existe mais:
+          rotation.y = 0
 
+          O vídeo começa exatamente
+          do enquadramento atual.
+        */
 
-        if (
-          spinTargetRef.current
-        ) {
-          spinTargetRef.current.rotation.y = 0
-        }
-
-
-        if (needsComposite) {
-          const targetAspect =
-            outputWidth / outputHeight
-
-          const drawFrame = () => {
-            const sw = canvas.width
-            const sh = canvas.height
-
-            if (sw && sh) {
-              const {
-                cropW,
-                cropH,
-                cropX,
-                cropY,
-              } = computeCoverCrop(
-                sw,
-                sh,
-                targetAspect,
-                cropOffsetXFrac,
-                cropOffsetYFrac
-              )
-
-              if (backgroundOptions) {
-                if (
-                  !bgLayerCanvas ||
-                  bgLayerCanvas.width !== sw ||
-                  bgLayerCanvas.height !== sh
-                ) {
-                  bgLayerCanvas =
-                    document.createElement(
-                      'canvas'
+          if (needsComposite) {
+            const targetAspect =
+              outputWidth /
+              outputHeight
+          
+            const drawFrame = () => {
+              const sw =
+                canvas.width
+          
+              const sh =
+                canvas.height
+          
+              if (sw && sh) {
+                const {
+                  cropW,
+                  cropH,
+                  cropX,
+                  cropY,
+                } = computeCoverCrop(
+                  sw,
+                  sh,
+                  targetAspect,
+                  cropOffsetXFrac,
+                  cropOffsetYFrac
+                )
+          
+                /*
+                  Limpa SEMPRE o frame anterior.
+                  Isso evita resíduos e mistura de
+                  frames durante a gravação.
+                */
+                compositeCtx.clearRect(
+                  0,
+                  0,
+                  outputWidth,
+                  outputHeight
+                )
+          
+                /*
+                  FUNDO
+                */
+                if (backgroundOptions) {
+                  if (
+                    !bgLayerCanvas ||
+                    bgLayerCanvas.width !== sw ||
+                    bgLayerCanvas.height !== sh
+                  ) {
+                    bgLayerCanvas =
+                      document.createElement(
+                        'canvas'
+                      )
+          
+                    bgLayerCanvas.width =
+                      sw
+          
+                    bgLayerCanvas.height =
+                      sh
+          
+                    const bctx =
+                      bgLayerCanvas.getContext(
+                        '2d'
+                      )
+          
+                    const layout =
+                      getImageLayout(
+                        backgroundOptions.naturalWidth,
+                        backgroundOptions.naturalHeight,
+                        sw,
+                        sh,
+                        backgroundOptions.fit,
+                        backgroundOptions.zoom,
+                        backgroundOptions.offsetXFrac,
+                        backgroundOptions.offsetYFrac
+                      )
+          
+                    bctx.drawImage(
+                      backgroundOptions.image,
+                      layout.x,
+                      layout.y,
+                      layout.drawW,
+                      layout.drawH
                     )
-
-                  bgLayerCanvas.width = sw
-                  bgLayerCanvas.height = sh
-
-                  const bctx =
-                    bgLayerCanvas.getContext(
-                      '2d'
-                    )
-
-                  const layout =
-                    getImageLayout(
-                      backgroundOptions.naturalWidth,
-                      backgroundOptions.naturalHeight,
-                      sw,
-                      sh,
-                      backgroundOptions.fit,
-                      backgroundOptions.zoom,
-                      backgroundOptions.offsetXFrac,
-                      backgroundOptions.offsetYFrac
-                    )
-
-                  bctx.drawImage(
-                    backgroundOptions.image,
-                    layout.x,
-                    layout.y,
-                    layout.drawW,
-                    layout.drawH
+                  }
+          
+                  compositeCtx.drawImage(
+                    bgLayerCanvas,
+                    cropX,
+                    cropY,
+                    cropW,
+                    cropH,
+                    0,
+                    0,
+                    outputWidth,
+                    outputHeight
                   )
                 }
-
+          
+                /*
+                  CANECA / THREE.JS
+                */
                 compositeCtx.drawImage(
-                  bgLayerCanvas,
-                  cropX, cropY, cropW, cropH,
-                  0, 0, outputWidth, outputHeight
-                )
-              } else {
-                compositeCtx.clearRect(
-                  0, 0, outputWidth, outputHeight
+                  canvas,
+                  cropX,
+                  cropY,
+                  cropW,
+                  cropH,
+                  0,
+                  0,
+                  outputWidth,
+                  outputHeight
                 )
               }
-
-              compositeCtx.drawImage(
-                canvas,
-                cropX, cropY, cropW, cropH,
-                0, 0, outputWidth, outputHeight
-              )
+          
+              compositeRafId =
+                requestAnimationFrame(
+                  drawFrame
+                )
             }
-
-            compositeRafId =
-              requestAnimationFrame(
-                drawFrame
-              )
+          
+            drawFrame()
           }
-
-          drawFrame()
-        }
-
-
-        recorder.start()
-
+        
+          recorder.start()
 
         setTimeout(
           () => recorder.stop(),
-          ROTATE_SECONDS * 1000
+          recordingDurationRef.current *
+            1000
         )
       },
-
     })
-
   }, [
     registerApi,
     gl,
     scene,
     camera,
     size,
+    controls,
     spinTargetRef,
+    videoSpeed,
+    videoEffect,
+    videoQuality,
   ])
-
 
   return null
 }
-
 
 export default function MugScene({
   art,
@@ -1306,16 +1673,27 @@ export default function MugScene({
   modelId,
   registerApi,
   spinTargetRef,
+  videoSpeed,
+  videoEffect,
+  videoQuality,
 }) {
   const [frame, setFrame] =
     useState(null)
 
 
   return (
-    <Canvas
-      shadows
-      dpr={[1, 2]}
-      camera={{
+<Canvas
+  shadows
+  dpr={[1, 2]}
+  style={{
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 2,
+    background: 'transparent',
+  }}
+  camera={{
         position: [
           2.7,
           1.8,
@@ -1326,14 +1704,18 @@ export default function MugScene({
       gl={{
         toneMapping:
           THREE.ACESFilmicToneMapping,
-
+      
         toneMappingExposure: 1.1,
-
+      
         preserveDrawingBuffer: true,
-
+      
         alpha: true,
-
+      
         premultipliedAlpha: false,
+      
+        antialias: true,
+      
+        powerPreference: 'high-performance',
       }}
     >
 
@@ -1411,10 +1793,13 @@ export default function MugScene({
         frame={frame}
       />
 
-      <CaptureRig
-        registerApi={registerApi}
-        spinTargetRef={spinTargetRef}
-      />
+<CaptureRig
+  registerApi={registerApi}
+  spinTargetRef={spinTargetRef}
+  videoSpeed={videoSpeed}
+  videoEffect={videoEffect}
+  videoQuality={videoQuality}
+/>
 
     </Canvas>
   )

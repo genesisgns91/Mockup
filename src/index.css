@@ -1402,7 +1402,8 @@ input[type="range"]::-moz-range-thumb {
 
   padding: 22px 26px;
 
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 
@@ -1454,7 +1455,7 @@ input[type="range"]::-moz-range-thumb {
 
   flex: 1;
 
-  min-height: 0;
+  min-height: 320px;
 
   padding: 5px;
 
@@ -2574,7 +2575,7 @@ input[type="range"]::-moz-range-thumb {
 
   pointer-events: none;
 
-  z-index: 5;
+  z-index: 1;
 }
 
 

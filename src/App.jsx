@@ -454,6 +454,15 @@ export default function App() {
   const [isRecording, setIsRecording] =
     useState(false)
 
+    const [videoSpeed, setVideoSpeed] =
+    useState(1)
+
+const [videoEffect, setVideoEffect] =
+    useState('mug')
+    
+    const [videoQuality, setVideoQuality] =
+    useState('standard')
+
   const [recordProgress, setRecordProgress] =
     useState(0)
 
@@ -630,42 +639,54 @@ export default function App() {
     ) {
       return
     }
-
+  
     setExportError(null)
     setIsRecording(true)
     setRecordProgress(0)
-
+  
     const format =
       activeFormat.width
         ? activeFormat
         : null
-
+  
     const backgroundOptions =
       buildBackgroundOptions()
-
-    const startTime = Date.now()
-
-    const progressTimer = setInterval(() => {
-      const elapsed = Date.now() - startTime
-
-      setRecordProgress(
-        Math.min(
-          100,
-          (elapsed / (ROTATE_SECONDS * 1000)) * 100
+  
+    const duration =
+      ROTATE_SECONDS /
+      Number(videoSpeed)
+  
+    const startTime =
+      Date.now()
+  
+    const progressTimer =
+      setInterval(() => {
+        const elapsed =
+          Date.now() - startTime
+  
+        setRecordProgress(
+          Math.min(
+            100,
+            (elapsed /
+              (duration * 1000)) *
+              100
+          )
         )
-      )
-    }, 100)
-
+      }, 100)
+  
     apiRef.current.startRecording(
       (
         blob,
         mimeType,
         error
       ) => {
-        clearInterval(progressTimer)
+        clearInterval(
+          progressTimer
+        )
+  
         setIsRecording(false)
         setRecordProgress(0)
-
+  
         if (
           error ||
           !blob
@@ -674,22 +695,28 @@ export default function App() {
             error ||
             'Não foi possível gravar o vídeo.'
           )
-
+  
           return
         }
-
+  
         const isMp4 =
           mimeType &&
           mimeType.includes('mp4')
-
+  
         setPreviewModal({
           type: 'video',
-          url: URL.createObjectURL(blob),
+          url:
+            URL.createObjectURL(
+              blob
+            ),
           blob,
           isMp4,
-          filename: buildFileName(
-            isMp4 ? 'mp4' : 'webm'
-          ),
+          filename:
+            buildFileName(
+              isMp4
+                ? 'mp4'
+                : 'webm'
+            ),
         })
       },
       {
@@ -697,6 +724,9 @@ export default function App() {
         backgroundOptions,
         cropOffsetXFrac,
         cropOffsetYFrac,
+        speed: videoSpeed,
+        effect: videoEffect,
+        quality: videoQuality,
       }
     )
   }
@@ -822,7 +852,15 @@ export default function App() {
             ÁREA 3D
         ================================================== */}
 
-        <main className="stage">
+<main
+  className="stage"
+  style={{
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    minWidth: 0,
+  }}
+>
 
           <div className="stage-header">
 
@@ -858,81 +896,162 @@ export default function App() {
           </div>
 
 
-          <div className="viewport-card">
+          <div
+  className="viewport-card"
+  style={{
+    position: 'relative',
+    zIndex: 1,
+    width: '100%',
+    flexShrink: 0,
+    marginBottom: '24px',
+  }}
+>
 
-            <div
-              className="viewport"
-              ref={viewportRef}
-            >
+  <div
+    className="viewport"
+    ref={viewportRef}
+    style={{
+      position: 'relative',
+      overflow: 'hidden',
+      isolation: 'isolate',
+    }}
+  >
 
-              <BackgroundImageLayer
-                background={background}
-                containerRef={viewportRef}
-              />
-
-
-              <MugScene
-                art={{
-                  ...art,
-                  onWarning: setWarning,
-                }}
-
-                background={background}
-
-                mugColors={mugColors}
-
-                mugShine={mugShine}
-
-                modelId={modelId}
-
-                registerApi={registerApi}
-
-                spinTargetRef={spinTargetRef}
-              />
-
-
-              <CropGuideOverlay
-                containerRef={viewportRef}
-                format={
-                  activeFormat.width
-                    ? activeFormat
-                    : null
-                }
-                offsetXFrac={cropOffsetXFrac}
-                offsetYFrac={cropOffsetYFrac}
-                onOffsetChange={(x, y) => {
-                  setCropOffsetXFrac(x)
-                  setCropOffsetYFrac(y)
-                }}
-              />
+    {/* FUNDO SÓLIDO DO VIEWPORT */}
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        background:
+          background.type === 'color'
+            ? background.color
+            : 'transparent',
+        zIndex: 0,
+        pointerEvents: 'none',
+      }}
+    />
 
 
-              <div className="viewport-help">
+    {/* FUNDO DE IMAGEM */}
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1,
+        pointerEvents: 'none',
+      }}
+    >
+      <BackgroundImageLayer
+        background={background}
+        containerRef={viewportRef}
+      />
+    </div>
 
-                <span className="help-icon">
-                  ↔
-                </span>
 
-                Arraste para girar
+    {/* CANECA 3D */}
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 2,
+      }}
+    >
+      <MugScene
+        art={{
+          ...art,
+          onWarning: setWarning,
+        }}
 
-                <span className="help-divider">
-                  •
-                </span>
+        background={background}
 
-                Scroll para aproximar
+        mugColors={mugColors}
 
-              </div>
+        mugShine={mugShine}
 
-            </div>
+        modelId={modelId}
 
-          </div>
+        registerApi={registerApi}
+
+        spinTargetRef={spinTargetRef}
+
+        videoSpeed={videoSpeed}
+
+        videoEffect={videoEffect}
+
+        videoQuality={videoQuality}
+      />
+    </div>
+
+
+    {/* GUIA DE CORTE */}
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 4,
+        pointerEvents: 'none',
+      }}
+    >
+      <CropGuideOverlay
+        containerRef={viewportRef}
+        format={
+          activeFormat.width
+            ? activeFormat
+            : null
+        }
+        offsetXFrac={cropOffsetXFrac}
+        offsetYFrac={cropOffsetYFrac}
+        onOffsetChange={(x, y) => {
+          setCropOffsetXFrac(x)
+          setCropOffsetYFrac(y)
+        }}
+      />
+    </div>
+
+
+    {/* AJUDA */}
+    <div
+      className="viewport-help"
+      style={{
+        position: 'absolute',
+        zIndex: 5,
+      }}
+    >
+
+      <span className="help-icon">
+        ↔
+      </span>
+
+      Arraste para girar
+
+      <span className="help-divider">
+        •
+      </span>
+
+      Scroll para aproximar
+
+    </div>
+
+  </div>
+
+</div>
 
 
           {/* ==================================================
               EXPORTAÇÃO
           ================================================== */}
 
-          <div className="export-card">
+<div
+  className="export-card"
+  style={{
+    position: 'relative',
+    zIndex: 10,
+    width: '100%',
+    flexShrink: 0,
+    marginTop: '0',
+    clear: 'both',
+  }}
+>
 
             <div className="export-heading">
 
@@ -1043,6 +1162,151 @@ export default function App() {
 
             </div>
 
+            <div
+  className="video-settings"
+  style={{
+    marginBottom: '16px',
+    display: 'grid',
+    gap: '12px',
+  }}
+>
+  <div>
+  <div>
+  <strong>
+    Qualidade do vídeo
+  </strong>
+
+  <div
+    style={{
+      display: 'flex',
+      gap: '8px',
+      marginTop: '8px',
+      flexWrap: 'wrap',
+    }}
+  >
+    {[
+      {
+        id: 'low',
+        label: 'Baixo',
+        hint: '360p',
+      },
+      {
+        id: 'standard',
+        label: 'Padrão',
+        hint: '720p',
+      },
+      {
+        id: 'high',
+        label: 'Alto',
+        hint: '1080p',
+      },
+    ].map((quality) => (
+      <button
+        key={quality.id}
+        type="button"
+        className={
+          videoQuality === quality.id
+            ? 'btn btn-primary'
+            : 'btn btn-secondary'
+        }
+        onClick={() =>
+          setVideoQuality(quality.id)
+        }
+        disabled={isRecording}
+      >
+        {quality.label}
+        <small
+          style={{
+            display: 'block',
+            marginTop: '2px',
+          }}
+        >
+          {quality.hint}
+        </small>
+      </button>
+    ))}
+  </div>
+</div>
+
+    <strong>
+      Velocidade do vídeo
+    </strong>
+
+    <div
+      style={{
+        display: 'flex',
+        gap: '8px',
+        marginTop: '8px',
+      }}
+    >
+      {[0.5, 1, 2].map(
+        (speed) => (
+          <button
+            key={speed}
+            type="button"
+            className={
+              videoSpeed === speed
+                ? 'btn btn-primary'
+                : 'btn btn-secondary'
+            }
+            onClick={() =>
+              setVideoSpeed(speed)
+            }
+            disabled={isRecording}
+          >
+            {speed}x
+          </button>
+        )
+      )}
+    </div>
+  </div>
+
+  <div>
+    <strong>
+      Efeito
+    </strong>
+
+    <select
+      value={videoEffect}
+      onChange={(e) =>
+        setVideoEffect(
+          e.target.value
+        )
+      }
+      disabled={isRecording}
+      style={{
+        width: '100%',
+        marginTop: '8px',
+        padding: '10px',
+        borderRadius: '8px',
+      }}
+    >
+      <option value="mug">
+        Giro da caneca
+      </option>
+
+      <option value="zoom">
+        Zoom lento
+      </option>
+
+      <option value="camera-up">
+        Câmera subindo
+      </option>
+
+      <option value="camera-spin">
+        Giro da câmera
+      </option>
+
+      <option value="zoom-mug">
+        Giro + zoom
+      </option>
+
+      <option value="none">
+        Sem movimento
+      </option>
+    </select>
+  </div>
+</div>
 
             <div className="export-actions">
 
