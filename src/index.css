@@ -1404,6 +1404,16 @@ input[type="range"]::-moz-range-thumb {
 
   overflow-y: auto;
   overflow-x: hidden;
+
+  /*
+    Reserva sempre o espaço da barra de rolagem
+    (mesmo quando o conteúdo ainda não estoura),
+    para que ela nunca apareça/suma durante o
+    scroll. Isso evita uma mudança de largura do
+    canvas 3D nesse momento, que fazia a câmera
+    ser reenquadrada e "resetar" a posição.
+  */
+  scrollbar-gutter: stable;
 }
 
 
