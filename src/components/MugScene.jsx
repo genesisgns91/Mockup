@@ -249,6 +249,7 @@ function Mug({
           mugColors.body
         ),
         ...mugMaterialParams,
+        side: THREE.DoubleSide,
       })
 
 
@@ -258,6 +259,7 @@ function Mug({
           mugColors.inside
         ),
         ...mugMaterialParams,
+        side: THREE.DoubleSide,
       })
 
 
@@ -267,6 +269,7 @@ function Mug({
           mugColors.handle
         ),
         ...mugMaterialParams,
+        side: THREE.DoubleSide,
       })
 
 
@@ -1680,6 +1683,49 @@ export default function MugScene({
   const [frame, setFrame] =
     useState(null)
 
+  /*
+    IMPORTANTE:
+    Esses objetos precisam ser memoizados (criados
+    apenas uma vez). Se fossem literais recriados a
+    cada render, o react-three-fiber reaplicaria a
+    configuracao inicial da camera sempre que
+    qualquer estado do App mudasse (ex: trocar o
+    formato de exportacao, a qualidade do video,
+    etc.), resetando a posicao/zoom que o usuario
+    ja tinha ajustado manualmente no viewport.
+  */
+  const initialCamera = useMemo(
+    () => ({
+      position: [
+        2.7,
+        1.8,
+        3.0,
+      ],
+      fov: 30,
+    }),
+    []
+  )
+
+  const glConfig = useMemo(
+    () => ({
+      toneMapping:
+        THREE.ACESFilmicToneMapping,
+
+      toneMappingExposure: 1.1,
+
+      preserveDrawingBuffer: true,
+
+      alpha: true,
+
+      premultipliedAlpha: false,
+
+      antialias: true,
+
+      powerPreference: 'high-performance',
+    }),
+    []
+  )
+
 
   return (
 <Canvas
@@ -1693,30 +1739,8 @@ export default function MugScene({
     zIndex: 2,
     background: 'transparent',
   }}
-  camera={{
-        position: [
-          2.7,
-          1.8,
-          3.0,
-        ],
-        fov: 30,
-      }}
-      gl={{
-        toneMapping:
-          THREE.ACESFilmicToneMapping,
-      
-        toneMappingExposure: 1.1,
-      
-        preserveDrawingBuffer: true,
-      
-        alpha: true,
-      
-        premultipliedAlpha: false,
-      
-        antialias: true,
-      
-        powerPreference: 'high-performance',
-      }}
+  camera={initialCamera}
+  gl={glConfig}
     >
 
       <SceneBackground
