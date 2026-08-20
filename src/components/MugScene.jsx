@@ -9,13 +9,30 @@ import {
   OrbitControls,
   Environment,
   ContactShadows,
-  useTexture,
 } from '@react-three/drei'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import * as THREE from 'three'
 import { useDecalTexture } from '../hooks/useDecalTexture.js'
+import {
+  getImageLayout,
+  computeCoverCrop,
+} from '../utils/exportLayout.js'
 
 
+/*
+  ==========================================================
+  FUNDO
+
+  Fundo sólido continua sendo desenhado pelo Three.js
+  (scene.background = Color), como antes.
+
+  Fundo de IMAGEM agora é responsabilidade do App.jsx,
+  renderizado em HTML por trás do canvas (que fica
+  transparente). Isso permite controle total de encaixe,
+  zoom e posição por arraste, com a mesma composição
+  aplicada também na exportação (PNG/vídeo).
+  ==========================================================
+*/
 function SceneBackground({ background }) {
   const { scene } = useThree()
 
@@ -29,41 +46,15 @@ function SceneBackground({ background }) {
         scene.background = null
       }
     }
+
+    scene.background = null
+
+    return undefined
   }, [
     background.type,
     background.color,
     scene,
   ])
-
-  if (
-    background.type === 'image' &&
-    background.image
-  ) {
-    return (
-      <BackgroundImage
-        url={background.image}
-      />
-    )
-  }
-
-  return null
-}
-
-
-function BackgroundImage({ url }) {
-  const { scene } = useThree()
-  const texture = useTexture(url)
-
-  useEffect(() => {
-    texture.colorSpace =
-      THREE.SRGBColorSpace
-
-    scene.background = texture
-
-    return () => {
-      scene.background = null
-    }
-  }, [texture, scene])
 
   return null
 }
@@ -96,58 +87,6 @@ const MODEL_URLS = {
 
 function baseName(name) {
   return name.replace(/\.\d+$/, '')
-}
-
-
-/*
-  ==========================================================
-  RECORTE PARA FORMATOS SOCIAIS (1:1, 4:5, 9:16...)
-
-  Recebe o canvas já renderizado e devolve um novo canvas
-  no tamanho exato do formato escolhido, recortando o
-  excedente do lado mais longo (comportamento "cover",
-  igual ao usado no guia visual mostrado ao usuário).
-  ==========================================================
-*/
-function cropCanvasToTarget(sourceCanvas, targetWidth, targetHeight) {
-  const sw = sourceCanvas.width
-  const sh = sourceCanvas.height
-
-  if (!sw || !sh) return sourceCanvas
-
-  const sourceAspect = sw / sh
-  const targetAspect = targetWidth / targetHeight
-
-  let cropW
-  let cropH
-  let cropX
-  let cropY
-
-  if (sourceAspect > targetAspect) {
-    cropH = sh
-    cropW = sh * targetAspect
-    cropX = (sw - cropW) / 2
-    cropY = 0
-  } else {
-    cropW = sw
-    cropH = sw / targetAspect
-    cropX = 0
-    cropY = (sh - cropH) / 2
-  }
-
-  const output = document.createElement('canvas')
-  output.width = targetWidth
-  output.height = targetHeight
-
-  const ctx = output.getContext('2d')
-  ctx.clearRect(0, 0, targetWidth, targetHeight)
-  ctx.drawImage(
-    sourceCanvas,
-    cropX, cropY, cropW, cropH,
-    0, 0, targetWidth, targetHeight
-  )
-
-  return output
 }
 
 
@@ -759,8 +698,13 @@ function CameraRig({ frame }) {
       controls.minDistance =
         distance * 0.45
 
+      /*
+        NOVO:
+        Zoom out mais generoso, para dar mais
+        espaço de composição/enquadramento.
+      */
       controls.maxDistance =
-        distance * 2.5
+        distance * 4.5
 
       controls.update()
     }
@@ -815,10 +759,25 @@ function CaptureRig({
         ======================================================
         SCREENSHOT
 
-        options.multiplier   -> fator de super-resolução
-        options.transparent  -> remove o fundo (PNG com alfa)
-        options.format       -> { width, height } para recorte
-                                 em formato social. null = livre
+        options.multiplier      -> fator de super-resolução
+        options.transparent     -> remove o fundo (PNG com alfa)
+        options.format          -> { width, height } para
+                                    recorte em formato social.
+                                    null = tamanho livre
+        options.backgroundOptions
+                                 -> { image, naturalWidth,
+                                    naturalHeight, fit, zoom,
+                                    offsetXFrac, offsetYFrac }
+                                    para compor a imagem de
+                                    fundo por baixo da caneca.
+                                    Ignorado quando transparent
+                                    é true.
+        options.cropOffsetXFrac,
+        options.cropOffsetYFrac -> deslocam o centro do
+                                    recorte do formato (0.5 =
+                                    centralizado), definidos
+                                    ao arrastar o guia de
+                                    corte no viewport.
         ======================================================
       */
       screenshot: (options = {}) => {
@@ -826,6 +785,9 @@ function CaptureRig({
           multiplier = 3,
           transparent = false,
           format = null,
+          backgroundOptions = null,
+          cropOffsetXFrac = 0.5,
+          cropOffsetYFrac = 0.5,
         } = options
 
         const prevRatio =
@@ -860,7 +822,14 @@ function CaptureRig({
           false
         )
 
-        if (transparent) {
+        const useBackgroundLayer =
+          !!backgroundOptions &&
+          !transparent
+
+        if (
+          transparent ||
+          useBackgroundLayer
+        ) {
           scene.background = null
           gl.setClearColor(0x000000, 0)
         }
@@ -870,29 +839,100 @@ function CaptureRig({
           camera
         )
 
-        let outputCanvas =
+        const sourceCanvas =
           gl.domElement
 
-        if (
-          format &&
-          format.width &&
-          format.height
-        ) {
-          outputCanvas =
-            cropCanvasToTarget(
-              gl.domElement,
-              format.width,
-              format.height
+        const sw = sourceCanvas.width
+        const sh = sourceCanvas.height
+
+        const outputWidth =
+          format ? format.width : sw
+
+        const outputHeight =
+          format ? format.height : sh
+
+        const targetAspect =
+          outputWidth / outputHeight
+
+        const {
+          cropW,
+          cropH,
+          cropX,
+          cropY,
+        } = computeCoverCrop(
+          sw,
+          sh,
+          targetAspect,
+          cropOffsetXFrac,
+          cropOffsetYFrac
+        )
+
+        const output =
+          document.createElement(
+            'canvas'
+          )
+
+        output.width = outputWidth
+        output.height = outputHeight
+
+        const octx =
+          output.getContext('2d')
+
+        if (useBackgroundLayer) {
+          const bgLayer =
+            document.createElement(
+              'canvas'
             )
+
+          bgLayer.width = sw
+          bgLayer.height = sh
+
+          const bctx =
+            bgLayer.getContext('2d')
+
+          const layout =
+            getImageLayout(
+              backgroundOptions.naturalWidth,
+              backgroundOptions.naturalHeight,
+              sw,
+              sh,
+              backgroundOptions.fit,
+              backgroundOptions.zoom,
+              backgroundOptions.offsetXFrac,
+              backgroundOptions.offsetYFrac
+            )
+
+          bctx.drawImage(
+            backgroundOptions.image,
+            layout.x,
+            layout.y,
+            layout.drawW,
+            layout.drawH
+          )
+
+          octx.drawImage(
+            bgLayer,
+            cropX, cropY, cropW, cropH,
+            0, 0, outputWidth, outputHeight
+          )
         }
 
+        octx.drawImage(
+          sourceCanvas,
+          cropX, cropY, cropW, cropH,
+          0, 0, outputWidth, outputHeight
+        )
+
         const dataUrl =
-          outputCanvas.toDataURL(
+          output.toDataURL(
             'image/png',
             1.0
           )
 
-        if (transparent) {
+        if (
+          transparent ||
+          useBackgroundLayer
+        ) {
           scene.background =
             prevBackground
 
@@ -925,42 +965,58 @@ function CaptureRig({
         ======================================================
         GRAVAÇÃO DE VÍDEO 360°
 
-        options.format -> { width, height } para gravar já
-                           recortado no formato social. Faz a
-                           composição frame a frame em um
-                           canvas 2D auxiliar, sem afetar a
-                           visualização ao vivo do usuário.
+        Mesmas opções de format/backgroundOptions/cropOffset
+        do screenshot. A composição (fundo + caneca
+        transparente + recorte) acontece quadro a quadro em
+        um canvas 2D auxiliar, sem afetar a visualização ao
+        vivo do usuário.
         ======================================================
       */
       startRecording: (
         onDone,
         options = {}
       ) => {
-        const { format = null } = options
+        const {
+          format = null,
+          backgroundOptions = null,
+          cropOffsetXFrac = 0.5,
+          cropOffsetYFrac = 0.5,
+        } = options
 
         const canvas =
           gl.domElement
+
+        const needsComposite =
+          !!format ||
+          !!backgroundOptions
+
+        const outputWidth =
+          format
+            ? format.width
+            : canvas.width
+
+        const outputHeight =
+          format
+            ? format.height
+            : canvas.height
 
         let streamSource = canvas
         let compositeCanvas = null
         let compositeCtx = null
         let compositeRafId = null
+        let bgLayerCanvas = null
 
-        if (
-          format &&
-          format.width &&
-          format.height
-        ) {
+        if (needsComposite) {
           compositeCanvas =
             document.createElement(
               'canvas'
             )
 
           compositeCanvas.width =
-            format.width
+            outputWidth
 
           compositeCanvas.height =
-            format.height
+            outputHeight
 
           compositeCtx =
             compositeCanvas.getContext(
@@ -971,7 +1027,42 @@ function CaptureRig({
             compositeCanvas
         }
 
+
+        const prevBackground =
+          scene.background
+
+        const prevClearColor =
+          new THREE.Color()
+
+        gl.getClearColor(
+          prevClearColor
+        )
+
+        const prevClearAlpha =
+          gl.getClearAlpha()
+
+        if (backgroundOptions) {
+          scene.background = null
+          gl.setClearColor(0x000000, 0)
+        }
+
+
+        const restoreBackground = () => {
+          if (backgroundOptions) {
+            scene.background =
+              prevBackground
+
+            gl.setClearColor(
+              prevClearColor,
+              prevClearAlpha
+            )
+          }
+        }
+
+
         if (!streamSource.captureStream) {
+          restoreBackground()
+
           onDone(
             null,
             null,
@@ -980,6 +1071,7 @@ function CaptureRig({
 
           return
         }
+
 
         const stream =
           streamSource.captureStream(30)
@@ -1000,6 +1092,8 @@ function CaptureRig({
 
 
         if (!window.MediaRecorder) {
+          restoreBackground()
+
           onDone(
             null,
             null,
@@ -1053,6 +1147,7 @@ function CaptureRig({
           recordingRef.current = false
 
           stopCompositeLoop()
+          restoreBackground()
 
           if (
             spinTargetRef.current
@@ -1088,47 +1183,83 @@ function CaptureRig({
         }
 
 
-        if (compositeCanvas) {
+        if (needsComposite) {
+          const targetAspect =
+            outputWidth / outputHeight
+
           const drawFrame = () => {
             const sw = canvas.width
             const sh = canvas.height
 
             if (sw && sh) {
-              const sourceAspect =
-                sw / sh
+              const {
+                cropW,
+                cropH,
+                cropX,
+                cropY,
+              } = computeCoverCrop(
+                sw,
+                sh,
+                targetAspect,
+                cropOffsetXFrac,
+                cropOffsetYFrac
+              )
 
-              const targetAspect =
-                format.width /
-                format.height
+              if (backgroundOptions) {
+                if (
+                  !bgLayerCanvas ||
+                  bgLayerCanvas.width !== sw ||
+                  bgLayerCanvas.height !== sh
+                ) {
+                  bgLayerCanvas =
+                    document.createElement(
+                      'canvas'
+                    )
 
-              let cropW
-              let cropH
-              let cropX
-              let cropY
+                  bgLayerCanvas.width = sw
+                  bgLayerCanvas.height = sh
 
-              if (
-                sourceAspect >
-                targetAspect
-              ) {
-                cropH = sh
-                cropW =
-                  sh * targetAspect
-                cropX =
-                  (sw - cropW) / 2
-                cropY = 0
+                  const bctx =
+                    bgLayerCanvas.getContext(
+                      '2d'
+                    )
+
+                  const layout =
+                    getImageLayout(
+                      backgroundOptions.naturalWidth,
+                      backgroundOptions.naturalHeight,
+                      sw,
+                      sh,
+                      backgroundOptions.fit,
+                      backgroundOptions.zoom,
+                      backgroundOptions.offsetXFrac,
+                      backgroundOptions.offsetYFrac
+                    )
+
+                  bctx.drawImage(
+                    backgroundOptions.image,
+                    layout.x,
+                    layout.y,
+                    layout.drawW,
+                    layout.drawH
+                  )
+                }
+
+                compositeCtx.drawImage(
+                  bgLayerCanvas,
+                  cropX, cropY, cropW, cropH,
+                  0, 0, outputWidth, outputHeight
+                )
               } else {
-                cropW = sw
-                cropH =
-                  sw / targetAspect
-                cropX = 0
-                cropY =
-                  (sh - cropH) / 2
+                compositeCtx.clearRect(
+                  0, 0, outputWidth, outputHeight
+                )
               }
 
               compositeCtx.drawImage(
                 canvas,
                 cropX, cropY, cropW, cropH,
-                0, 0, format.width, format.height
+                0, 0, outputWidth, outputHeight
               )
             }
 

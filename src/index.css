@@ -1212,6 +1212,13 @@ input[type="range"]::-moz-range-thumb {
 }
 
 
+.segmented-control.three-col {
+
+  grid-template-columns:
+    repeat(3, 1fr);
+}
+
+
 /* =========================================================
    CORES
 ========================================================= */
@@ -2129,6 +2136,125 @@ input[type="range"]::-moz-range-thumb {
 
 
 /* =========================================================
+   CAMADA DE FUNDO (IMAGEM) NO VIEWPORT
+========================================================= */
+
+.bg-image-layer {
+
+  position: absolute;
+
+  inset: 0;
+
+  overflow: hidden;
+
+  pointer-events: none;
+
+  z-index: 0;
+}
+
+
+.bg-image-layer img {
+
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  max-width: none;
+
+  user-select: none;
+
+  transition: opacity 200ms ease;
+}
+
+
+/* =========================================================
+   PRÉVIA ARRASTÁVEL DO FUNDO (PAINEL)
+========================================================= */
+
+.bg-position-preview {
+
+  position: relative;
+
+  width: 100%;
+
+  aspect-ratio: 16 / 10;
+
+  overflow: hidden;
+
+  margin-top: 4px;
+  margin-bottom: 16px;
+
+  border: 1px solid var(--border);
+
+  border-radius: var(--radius-sm);
+
+  background:
+    repeating-conic-gradient(
+      #EDE7DC 0% 25%,
+      #F8F5EF 0% 50%
+    )
+    50% / 16px 16px;
+
+  box-shadow: var(--shadow-sm);
+}
+
+
+.bg-position-image {
+
+  position: absolute;
+
+  top: 0;
+  left: 0;
+
+  max-width: none;
+
+  user-select: none;
+
+  transition: opacity 200ms ease;
+}
+
+
+.bg-position-image.draggable {
+
+  cursor: grab;
+}
+
+
+.bg-position-image.draggable.dragging {
+
+  cursor: grabbing;
+}
+
+
+.bg-position-hint {
+
+  position: absolute;
+
+  bottom: 8px;
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  padding: 4px 10px;
+
+  border-radius: var(--radius-full);
+
+  background: rgba(27, 18, 48, 0.72);
+
+  color: white;
+
+  font-size: 0.56rem;
+
+  font-weight: 600;
+
+  pointer-events: none;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
    FORMATO DE EXPORTAÇÃO
 ========================================================= */
 
@@ -2446,10 +2572,6 @@ input[type="range"]::-moz-range-thumb {
 
   inset: 0;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
   pointer-events: none;
 
   z-index: 5;
@@ -2458,7 +2580,7 @@ input[type="range"]::-moz-range-thumb {
 
 .crop-guide-frame {
 
-  position: relative;
+  position: absolute;
 
   box-shadow:
     0 0 0 2000px rgba(15, 10, 25, 0.55);
@@ -2466,6 +2588,22 @@ input[type="range"]::-moz-range-thumb {
   border: 2px dashed rgba(255, 255, 255, 0.9);
 
   border-radius: 10px;
+
+  pointer-events: none;
+}
+
+
+.crop-guide-frame.draggable {
+
+  pointer-events: auto;
+
+  cursor: grab;
+}
+
+
+.crop-guide-frame.draggable.dragging {
+
+  cursor: grabbing;
 }
 
 
@@ -2493,6 +2631,35 @@ input[type="range"]::-moz-range-thumb {
   white-space: nowrap;
 
   backdrop-filter: blur(4px);
+
+  pointer-events: none;
+}
+
+
+.crop-guide-drag-hint {
+
+  position: absolute;
+
+  bottom: 10px;
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  padding: 5px 11px;
+
+  border-radius: var(--radius-full);
+
+  background: rgba(255, 255, 255, 0.88);
+
+  color: var(--text);
+
+  font-size: 0.56rem;
+
+  font-weight: 600;
+
+  white-space: nowrap;
+
+  pointer-events: none;
 }
 
 

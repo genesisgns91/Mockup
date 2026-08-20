@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import MugScene, { ROTATE_SECONDS } from './components/MugScene.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
+import { clamp01, getImageLayout } from './utils/exportLayout.js'
 
 
 function downloadBlob(blob, filename) {
@@ -65,21 +66,109 @@ const EXPORT_FORMATS = [
 
 /*
   ==========================================================
+  CAMADA DE FUNDO (IMAGEM)
+
+  Renderizada em HTML, atrás do canvas 3D (que fica
+  transparente quando o fundo é uma imagem). Aplica o
+  encaixe (cobrir / largura / altura), o zoom e a posição
+  de arraste vindos do painel de controle.
+
+  Fica só de leitura aqui: a interação de arrastar acontece
+  na pequena prévia dentro do painel, para não conflitar
+  com o gesto de girar a caneca no viewport.
+  ==========================================================
+*/
+function BackgroundImageLayer({ background, containerRef }) {
+  const [box, setBox] = useState({ width: 0, height: 0 })
+  const [natural, setNatural] = useState({ width: 0, height: 0 })
+
+  useEffect(() => {
+    const el = containerRef.current
+
+    if (!el) return undefined
+
+    const compute = () => {
+      const rect = el.getBoundingClientRect()
+      setBox({ width: rect.width, height: rect.height })
+    }
+
+    compute()
+
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+
+    return () => ro.disconnect()
+  }, [containerRef])
+
+  useEffect(() => {
+    setNatural({ width: 0, height: 0 })
+  }, [background.image])
+
+  if (!background.image) return null
+
+  const layout = getImageLayout(
+    natural.width,
+    natural.height,
+    box.width,
+    box.height,
+    background.fit,
+    background.zoom,
+    background.offsetXFrac,
+    background.offsetYFrac
+  )
+
+  return (
+    <div className="bg-image-layer">
+      <img
+        src={background.image}
+        alt=""
+        draggable={false}
+        onLoad={(e) =>
+          setNatural({
+            width: e.target.naturalWidth,
+            height: e.target.naturalHeight,
+          })
+        }
+        style={{
+          width: `${layout.drawW}px`,
+          height: `${layout.drawH}px`,
+          transform: `translate(${layout.x}px, ${layout.y}px)`,
+          opacity: natural.width ? 1 : 0,
+        }}
+      />
+    </div>
+  )
+}
+
+
+/*
+  ==========================================================
   GUIA DE CORTE
 
   Sobrepõe ao viewport 3D um recorte que mostra exatamente
-  a área que será mantida na exportação final, para o
-  usuário compor a cena antes de salvar.
+  a área que será mantida na exportação final. Pode ser
+  arrastado (quando há espaço sobrando em algum eixo) para
+  escolher o que fica visível no formato escolhido.
   ==========================================================
 */
-function CropGuideOverlay({ containerRef, format }) {
+function CropGuideOverlay({
+  containerRef,
+  format,
+  offsetXFrac,
+  offsetYFrac,
+  onOffsetChange,
+}) {
   const [box, setBox] = useState(null)
+  const [containerSize, setContainerSize] = useState(null)
+  const dragRef = useRef(null)
+  const [dragging, setDragging] = useState(false)
 
   useEffect(() => {
     const el = containerRef.current
 
     if (!el || !format) {
       setBox(null)
+      setContainerSize(null)
       return undefined
     }
 
@@ -88,11 +177,8 @@ function CropGuideOverlay({ containerRef, format }) {
 
       if (!rect.width || !rect.height) return
 
-      const targetAspect =
-        format.width / format.height
-
-      const containerAspect =
-        rect.width / rect.height
+      const targetAspect = format.width / format.height
+      const containerAspect = rect.width / rect.height
 
       let w
       let h
@@ -106,6 +192,7 @@ function CropGuideOverlay({ containerRef, format }) {
       }
 
       setBox({ w, h })
+      setContainerSize({ w: rect.width, h: rect.height })
     }
 
     compute()
@@ -116,20 +203,96 @@ function CropGuideOverlay({ containerRef, format }) {
     return () => ro.disconnect()
   }, [containerRef, format])
 
-  if (!format || !box) return null
+  if (!format || !box || !containerSize) return null
+
+  const slackX = Math.max(0, containerSize.w - box.w)
+  const slackY = Math.max(0, containerSize.h - box.h)
+  const canDrag = slackX > 2 || slackY > 2
+
+  const left = slackX * clamp01(offsetXFrac)
+  const top = slackY * clamp01(offsetYFrac)
+
+  const handlePointerDown = (e) => {
+    if (!canDrag) return
+
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setDragging(true)
+
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      startOffsetX: offsetXFrac,
+      startOffsetY: offsetYFrac,
+    }
+  }
+
+  const handlePointerMove = (e) => {
+    if (!dragRef.current) return
+
+    e.stopPropagation()
+
+    const deltaX = e.clientX - dragRef.current.startX
+    const deltaY = e.clientY - dragRef.current.startY
+
+    const nextX = slackX
+      ? clamp01(
+          dragRef.current.startOffsetX + deltaX / slackX
+        )
+      : 0.5
+
+    const nextY = slackY
+      ? clamp01(
+          dragRef.current.startOffsetY + deltaY / slackY
+        )
+      : 0.5
+
+    onOffsetChange(nextX, nextY)
+  }
+
+  const handlePointerUp = (e) => {
+    dragRef.current = null
+    setDragging(false)
+
+    if (e.currentTarget.releasePointerCapture) {
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        // ignora se o ponteiro já foi liberado
+      }
+    }
+  }
 
   return (
     <div className="crop-guide">
       <div
-        className="crop-guide-frame"
+        className={
+          canDrag
+            ? `crop-guide-frame draggable${dragging ? ' dragging' : ''}`
+            : 'crop-guide-frame'
+        }
         style={{
           width: `${box.w}px`,
           height: `${box.h}px`,
+          left: `${left}px`,
+          top: `${top}px`,
         }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
+
         <span className="crop-guide-tag">
           {format.hint}
         </span>
+
+        {canDrag && (
+          <span className="crop-guide-drag-hint">
+            ⇕ Arraste para ajustar o enquadramento
+          </span>
+        )}
+
       </div>
     </div>
   )
@@ -140,8 +303,8 @@ function CropGuideOverlay({ containerRef, format }) {
   ==========================================================
   MODAL DE PRÉVIA
 
-  Mostra o resultado final (imagem ou vídeo, já no formato
-  e recorte escolhidos) antes de confirmar o download.
+  Mostra o resultado final (imagem ou vídeo, já no formato,
+  fundo e recorte escolhidos) antes de confirmar o download.
   ==========================================================
 */
 function ExportPreviewModal({ data, onClose, onConfirm }) {
@@ -252,6 +415,16 @@ export default function App() {
     type: 'color',
     color: '#F3ECE3',
     image: null,
+
+    /*
+      NOVO:
+      Encaixe ('cover' | 'width' | 'height'), zoom (1 a 3)
+      e posição de arraste (0 a 1) da imagem de fundo.
+    */
+    fit: 'cover',
+    zoom: 1,
+    offsetXFrac: 0.5,
+    offsetYFrac: 0.5,
   })
 
 
@@ -263,7 +436,6 @@ export default function App() {
 
 
   /*
-    NOVO:
     Controle de brilho das canecas.
 
     0 = fosco
@@ -290,15 +462,21 @@ export default function App() {
 
 
   /*
-    NOVO:
-    Formato de exportação (proporção) e
-    opção de fundo transparente para PNG.
+    Formato de exportação (proporção),
+    fundo transparente e deslocamento do
+    recorte (posição do guia arrastável).
   */
   const [exportFormatId, setExportFormatId] =
     useState('free')
 
   const [transparentBg, setTransparentBg] =
     useState(false)
+
+  const [cropOffsetXFrac, setCropOffsetXFrac] =
+    useState(0.5)
+
+  const [cropOffsetYFrac, setCropOffsetYFrac] =
+    useState(0.5)
 
   const [previewModal, setPreviewModal] =
     useState(null)
@@ -310,6 +488,18 @@ export default function App() {
     ) || EXPORT_FORMATS[0]
 
 
+  /*
+    Recentraliza o guia de corte sempre que o
+    formato muda, para não herdar um
+    deslocamento que não faz sentido no novo
+    enquadramento.
+  */
+  useEffect(() => {
+    setCropOffsetXFrac(0.5)
+    setCropOffsetYFrac(0.5)
+  }, [exportFormatId])
+
+
   const apiRef = useRef(null)
 
   const spinTargetRef =
@@ -317,6 +507,45 @@ export default function App() {
 
   const viewportRef =
     useRef(null)
+
+  /*
+    Elemento de imagem "de verdade" (fora do DOM
+    visível), carregado sempre que a imagem de
+    fundo muda, para poder ser desenhado em um
+    canvas na hora de exportar PNG/vídeo.
+  */
+  const bgImageElRef =
+    useRef(null)
+
+  const [bgImageReady, setBgImageReady] =
+    useState(false)
+
+
+  useEffect(() => {
+    if (
+      background.type !== 'image' ||
+      !background.image
+    ) {
+      bgImageElRef.current = null
+      setBgImageReady(false)
+      return undefined
+    }
+
+    let cancelled = false
+    const img = new Image()
+
+    img.onload = () => {
+      if (cancelled) return
+      bgImageElRef.current = img
+      setBgImageReady(true)
+    }
+
+    img.src = background.image
+
+    return () => {
+      cancelled = true
+    }
+  }, [background.type, background.image])
 
 
   const registerApi =
@@ -340,6 +569,27 @@ export default function App() {
   }
 
 
+  const buildBackgroundOptions = () => {
+    if (
+      background.type !== 'image' ||
+      !bgImageReady ||
+      !bgImageElRef.current
+    ) {
+      return null
+    }
+
+    return {
+      image: bgImageElRef.current,
+      naturalWidth: bgImageElRef.current.naturalWidth,
+      naturalHeight: bgImageElRef.current.naturalHeight,
+      fit: background.fit,
+      zoom: background.zoom,
+      offsetXFrac: background.offsetXFrac,
+      offsetYFrac: background.offsetYFrac,
+    }
+  }
+
+
   const handleScreenshot = () => {
     if (!apiRef.current) return
 
@@ -350,11 +600,19 @@ export default function App() {
         ? activeFormat
         : null
 
+    const backgroundOptions =
+      transparentBg
+        ? null
+        : buildBackgroundOptions()
+
     const dataUrl =
       apiRef.current.screenshot({
         multiplier: 3,
         transparent: transparentBg,
         format,
+        backgroundOptions,
+        cropOffsetXFrac,
+        cropOffsetYFrac,
       })
 
     setPreviewModal({
@@ -381,6 +639,9 @@ export default function App() {
       activeFormat.width
         ? activeFormat
         : null
+
+    const backgroundOptions =
+      buildBackgroundOptions()
 
     const startTime = Date.now()
 
@@ -431,7 +692,12 @@ export default function App() {
           ),
         })
       },
-      { format }
+      {
+        format,
+        backgroundOptions,
+        cropOffsetXFrac,
+        cropOffsetYFrac,
+      }
     )
   }
 
@@ -599,6 +865,12 @@ export default function App() {
               ref={viewportRef}
             >
 
+              <BackgroundImageLayer
+                background={background}
+                containerRef={viewportRef}
+              />
+
+
               <MugScene
                 art={{
                   ...art,
@@ -626,6 +898,12 @@ export default function App() {
                     ? activeFormat
                     : null
                 }
+                offsetXFrac={cropOffsetXFrac}
+                offsetYFrac={cropOffsetYFrac}
+                onOffsetChange={(x, y) => {
+                  setCropOffsetXFrac(x)
+                  setCropOffsetYFrac(y)
+                }}
               />
 
 
