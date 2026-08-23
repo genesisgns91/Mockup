@@ -17,6 +17,7 @@ import {
   getImageLayout,
   computeCoverCrop,
 } from '../utils/exportLayout.js'
+import { MATERIAL, PRINT_MODE, getModel } from '../config/models.js'
 
 
 /*
@@ -70,18 +71,8 @@ const TARGET_HEIGHT = 1.7
 export const ROTATE_SECONDS = 6
 
 
-const MODEL_URLS = {
-  single:
-    `${import.meta.env.BASE_URL}model.obj`,
-
-  duo:
-    `${import.meta.env.BASE_URL}model-duo.obj`,
-
-  trio:
-    `${import.meta.env.BASE_URL}model-trio.obj`,
-
-  trioPaper:
-    `${import.meta.env.BASE_URL}model-trio-paper.obj`,
+function modelUrl(config) {
+  return `${import.meta.env.BASE_URL}${config.file}`
 }
 
 
@@ -91,33 +82,124 @@ function baseName(name) {
 
 
 /*
+  Nomes de peças que carregam a arte impressa. Cobre "print",
+  "print.001" (sufixo já removido por baseName), "printA"/"printB"
+  e variações como "strip_print", "handle_print", "heart_mug_print".
+  Um único regex genérico cobre todos os 37 modelos sem precisar de
+  lista por modelo.
+*/
+function isPrintPartName(name) {
+  return /print/i.test(name)
+}
+
+
+/*
   0 = fosco
   1 = brilho máximo
+
+  Parâmetros físicos por família de material. "shine" (o slider de
+  brilho do painel) só se aplica a materiais onde faz sentido variar
+  (cerâmica e plástico); os demais têm um acabamento fisicamente
+  coerente fixo, para tecido nunca parecer plástico brilhante, metal
+  nunca parecer fosco, etc.
 */
-function getMugMaterialParams(mugShine) {
-  const shine = Math.max(
-    0,
-    Math.min(
-      1,
-      Number(mugShine) || 0
-    )
-  )
+function getMaterialParams(materialKind, shine) {
+  const s = Math.max(0, Math.min(1, Number(shine) || 0))
 
-  return {
-    metalness: 0,
+  switch (materialKind) {
+    case MATERIAL.CERAMIC:
+      return {
+        metalness: 0,
+        roughness: 0.72 - s * 0.50,
+        clearcoat: s,
+        clearcoatRoughness: 0.65 - s * 0.50,
+        envMapIntensity: 0.25 + s * 0.75,
+      }
 
-    roughness:
-      0.72 - shine * 0.50,
+    case MATERIAL.PLASTIC:
+      return {
+        metalness: 0,
+        roughness: 0.45 - s * 0.30,
+        clearcoat: 0.35 + s * 0.4,
+        clearcoatRoughness: 0.3 - s * 0.2,
+        envMapIntensity: 0.5 + s * 0.5,
+      }
 
-    clearcoat:
-      shine,
+    case MATERIAL.GLASS:
+      return {
+        metalness: 0,
+        roughness: 0.05,
+        transmission: 0.9,
+        thickness: 0.4,
+        ior: 1.45,
+        clearcoat: 0.3,
+        clearcoatRoughness: 0.1,
+        envMapIntensity: 1.1,
+        transparent: true,
+      }
 
-    clearcoatRoughness:
-      0.65 - shine * 0.50,
+    case MATERIAL.METAL:
+      return {
+        metalness: 0.9,
+        roughness: 0.32,
+        clearcoat: 0.1,
+        clearcoatRoughness: 0.2,
+        envMapIntensity: 1.2,
+      }
 
-    envMapIntensity:
-      0.25 + shine * 0.75,
+    case MATERIAL.LEATHER:
+      return {
+        metalness: 0,
+        roughness: 0.55,
+        clearcoat: 0.08,
+        clearcoatRoughness: 0.4,
+        envMapIntensity: 0.35,
+      }
+
+    case MATERIAL.FOAM:
+      return {
+        metalness: 0,
+        roughness: 0.95,
+        clearcoat: 0,
+        envMapIntensity: 0.15,
+      }
+
+    case MATERIAL.CARDBOARD:
+      return {
+        metalness: 0,
+        roughness: 0.9,
+        clearcoat: 0,
+        envMapIntensity: 0.2,
+      }
+
+    case MATERIAL.FABRIC:
+    default:
+      return {
+        metalness: 0,
+        roughness: 0.92,
+        clearcoat: 0,
+        envMapIntensity: 0.2,
+      }
   }
+}
+
+
+/*
+  Parâmetros para a PEÇA COM A ARTE aplicada (o "print"). Igual ao
+  material do corpo na maioria dos casos — mas em peças de vidro a
+  tinta da estampa cobre a transparência (não faz sentido a arte
+  "vazar luz" através do vidro), então usamos um acabamento opaco e
+  levemente brilhante em vez do vidro transmissivo puro.
+*/
+function getPrintMaterialParams(materialKind, shine) {
+  if (materialKind === MATERIAL.GLASS) {
+    return getMaterialParams(
+      MATERIAL.PLASTIC,
+      Math.max(Number(shine) || 0, 0.5)
+    )
+  }
+
+  return getMaterialParams(materialKind, shine)
 }
 
 
@@ -180,6 +262,15 @@ function createPaperTexture(texture) {
 }
 
 
+// "printA"/"printB": placeholders da folha solta (só existem em modelos
+// com "hasPaper"). Precisam ser distinguidos da área de impressão real
+// ("print", "strip_print", "heart_mug_print"...), que casa com o regex
+// genérico isPrintPartName.
+function isLooseSheetName(name) {
+  return /^print[A-Z]$/.test(name)
+}
+
+
 function Mug({
   art,
   mugColors,
@@ -187,13 +278,11 @@ function Mug({
   modelId,
   onFrame,
 }) {
-  const modelUrl =
-    MODEL_URLS[modelId] ||
-    MODEL_URLS.single
+  const config = getModel(modelId)
 
   const obj = useLoader(
     OBJLoader,
-    modelUrl
+    modelUrl(config)
   )
 
   const group = useMemo(
@@ -237,38 +326,35 @@ function Mug({
 
 
   useEffect(() => {
-    const mugMaterialParams =
-      getMugMaterialParams(
-        mugShine
-      )
+    const bodyParams = {
+      ...getMaterialParams(config.material, mugShine),
+      ...(config.materialBoost || {}),
+    }
+
+    const neutralParams =
+      getMaterialParams(config.material, mugShine)
 
 
     const bodyMaterial =
       new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(
-          mugColors.body
-        ),
-        ...mugMaterialParams,
+        color: new THREE.Color(mugColors.body),
+        ...bodyParams,
         side: THREE.DoubleSide,
       })
 
 
     const insideMaterial =
       new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(
-          mugColors.inside
-        ),
-        ...mugMaterialParams,
+        color: new THREE.Color(mugColors.inside),
+        ...neutralParams,
         side: THREE.DoubleSide,
       })
 
 
     const handleMaterial =
       new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(
-          mugColors.handle
-        ),
-        ...mugMaterialParams,
+        color: new THREE.Color(mugColors.handle),
+        ...neutralParams,
         side: THREE.DoubleSide,
       })
 
@@ -278,9 +364,34 @@ function Mug({
         getPaperMaterialParams()
       )
 
+    /*
+      Materiais de "peças especiais" (metal, plástico, vidro, espuma...)
+      declarados em config.partOverrides. Criados sob demanda e
+      reaproveitados entre peças do mesmo tipo dentro do mesmo modelo.
+    */
+    const overrideMaterials = new Map()
+
+    function getOverrideMaterial(materialKind) {
+      if (!overrideMaterials.has(materialKind)) {
+        overrideMaterials.set(
+          materialKind,
+          new THREE.MeshPhysicalMaterial({
+            color: new THREE.Color(mugColors.body),
+            ...getMaterialParams(materialKind, mugShine),
+            side: THREE.DoubleSide,
+          })
+        )
+      }
+
+      return overrideMaterials.get(materialKind)
+    }
+
+
+    const printTargets = config.printTargets || null
 
     let printRadiusUnits = null
     let printHeightUnits = null
+    let printWidthUnits = null
 
 
     group.traverse((child) => {
@@ -289,8 +400,11 @@ function Mug({
       const name =
         baseName(child.name)
 
+      const override =
+        config.partOverrides?.[name]
 
-      if (name === 'pivot') {
+
+      if (name === 'pivot' || override === MATERIAL.HIDDEN) {
         child.visible = false
         return
       }
@@ -300,153 +414,163 @@ function Mug({
       child.receiveShadow = true
 
 
-      if (name === 'inside') {
-        child.material =
-          insideMaterial
-
-        return
-      }
-
-
-      if (name === 'handle') {
-        child.material =
-          handleMaterial
-
-        return
-      }
-
-
       if (name === 'decal') {
         child.visible = false
         return
       }
 
 
-      /*
-        MODELOS SEM FOLHA
-      */
-      if (
-        modelId !== 'trioPaper' &&
-        name !== 'print' &&
-        name.startsWith('print')
-      ) {
-        child.visible = false
+      const isLooseSheet =
+        isLooseSheetName(name)
+
+      if (isLooseSheet) {
+        /*
+          Folha solta (só existe visualmente em modelos com "hasPaper",
+          ex: trioPaper). Nos demais modelos que compartilham o mesmo
+          .obj de base, ela fica escondida.
+        */
+        if (config.hasPaper) {
+          child.visible = true
+          child.material = paperMaterial
+        } else {
+          child.visible = false
+        }
         return
       }
 
 
-      /*
-        FOLHAS DO MODELO trioPaper
-      */
-      if (
-        modelId === 'trioPaper' &&
-        name !== 'print' &&
-        name.startsWith('print')
-      ) {
-        child.visible = true
+      const isPrintTarget =
+        printTargets
+          ? printTargets.includes(name)
+          : isPrintPartName(name)
 
-        child.material =
-          paperMaterial
+      if (isPrintTarget) {
+        /*
+          ÁREA DE IMPRESSÃO
 
-        return
-      }
-
-
-      /*
-        ÁREA DE IMPRESSÃO DAS CANECAS
-      */
-      if (name === 'print') {
-
-        if (
-          printRadiusUnits === null
-        ) {
+          Medida uma única vez (na primeira peça encontrada) e reusada
+          para as demais cópias do mesmo tipo (ex: as 3 canecas do trio).
+        */
+        if (printHeightUnits === null) {
           const pos =
             child.geometry.attributes.position
 
+          let minX = Infinity
+          let maxX = -Infinity
           let minY = Infinity
           let maxY = -Infinity
+          let minZ = Infinity
+          let maxZ = -Infinity
 
           let sumX = 0
           let sumZ = 0
 
 
-          for (
-            let i = 0;
-            i < pos.count;
-            i++
-          ) {
-            const y =
-              pos.getY(i)
+          for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i)
+            const y = pos.getY(i)
+            const z = pos.getZ(i)
 
-            if (y < minY) {
-              minY = y
-            }
+            if (x < minX) minX = x
+            if (x > maxX) maxX = x
+            if (y < minY) minY = y
+            if (y > maxY) maxY = y
+            if (z < minZ) minZ = z
+            if (z > maxZ) maxZ = z
 
-            if (y > maxY) {
-              maxY = y
-            }
-
-            sumX += pos.getX(i)
-            sumZ += pos.getZ(i)
+            sumX += x
+            sumZ += z
           }
 
 
-          const centerX =
-            sumX / pos.count
+          if (config.printMode === PRINT_MODE.FLAT) {
+            /*
+              Peça "plana" pode estar de pé (camiseta, almofada, azulejo
+              — a face olha para o eixo Z, então a largura vem de X e a
+              altura de Y) OU deitada (mousepad — a face olha para cima,
+              eixo Y, então a largura vem de X e a "altura" (a outra
+              direção da estampa) vem de Z). Detectamos automaticamente
+              qual é o eixo "fino" (a espessura da peça) e usamos os
+              outros dois como largura/altura, para nunca dividir por
+              uma variação quase zero.
+            */
+            const rangeX = maxX - minX
+            const rangeY = maxY - minY
+            const rangeZ = maxZ - minZ
 
-          const centerZ =
-            sumZ / pos.count
+            if (rangeY <= rangeX && rangeY <= rangeZ) {
+              // eixo fino = Y (peça deitada, ex: mousepad)
+              printWidthUnits = rangeX
+              printHeightUnits = rangeZ
+            } else if (rangeZ <= rangeX && rangeZ <= rangeY) {
+              // eixo fino = Z (peça de pé, ex: camiseta/almofada/azulejo)
+              printWidthUnits = rangeX
+              printHeightUnits = rangeY
+            } else {
+              // eixo fino = X (raro)
+              printWidthUnits = rangeZ
+              printHeightUnits = rangeY
+            }
+          } else {
+            const centerX = sumX / pos.count
+            const centerZ = sumZ / pos.count
 
+            let rSum = 0
 
-          let rSum = 0
+            for (let i = 0; i < pos.count; i++) {
+              const x = pos.getX(i) - centerX
+              const z = pos.getZ(i) - centerZ
+              rSum += Math.hypot(x, z)
+            }
 
-
-          for (
-            let i = 0;
-            i < pos.count;
-            i++
-          ) {
-            const x =
-              pos.getX(i) -
-              centerX
-
-            const z =
-              pos.getZ(i) -
-              centerZ
-
-            rSum += Math.hypot(
-              x,
-              z
-            )
+            printRadiusUnits = rSum / pos.count
+            printHeightUnits = maxY - minY
           }
-
-
-          printRadiusUnits =
-            rSum / pos.count
-
-          printHeightUnits =
-            maxY - minY
         }
 
         return
       }
 
 
-      child.material =
-        bodyMaterial
+      if (override) {
+        child.material =
+          getOverrideMaterial(override)
+
+        return
+      }
+
+
+      /*
+        endsWith (em vez de ===) para também cobrir nomes compostos
+        como "heart_mug_inside" / "mug_handle" (ex: caneca casal),
+        sem confundir com peças tipo "handle_chrome" ou
+        "handle_support" (que não TERMINAM em handle/inside).
+      */
+      if (name.endsWith('inside') || name.includes('interior')) {
+        child.material = insideMaterial
+        return
+      }
+
+
+      if (name.endsWith('handle')) {
+        child.material = handleMaterial
+        return
+      }
+
+
+      child.material = bodyMaterial
     })
 
 
-    if (
-      printRadiusUnits !== null
-    ) {
+    if (printHeightUnits !== null) {
       setMeasurements({
-        radiusUnits:
-          printRadiusUnits,
-
-        heightUnits:
-          printHeightUnits,
+        mode: config.printMode,
+        radiusUnits: printRadiusUnits,
+        widthUnits: printWidthUnits,
+        heightUnits: printHeightUnits,
       })
+    } else {
+      setMeasurements(null)
     }
 
 
@@ -455,11 +579,13 @@ function Mug({
       insideMaterial.dispose()
       handleMaterial.dispose()
       paperMaterial.dispose()
+
+      overrideMaterials.forEach((m) => m.dispose())
     }
 
   }, [
     group,
-    modelId,
+    config,
     mugShine,
     mugColors.body,
     mugColors.inside,
@@ -476,14 +602,12 @@ function Mug({
     artHeightMM: art.heightMM,
     offsetXMM: art.offsetXMM,
     offsetYMM: art.offsetYMM,
-    mugRadiusUnits:
-      measurements?.radiusUnits,
-    mugHeightUnits:
-      measurements?.heightUnits,
-    mugRealHeightMM:
-      art.mugRealHeightMM,
-    baseColor:
-      mugColors.body,
+    mode: measurements?.mode || config.printMode,
+    radiusUnits: measurements?.radiusUnits,
+    widthUnits: measurements?.widthUnits,
+    heightUnits: measurements?.heightUnits,
+    realHeightMM: art.mugRealHeightMM,
+    baseColor: mugColors.body,
   })
 
 
@@ -495,26 +619,20 @@ function Mug({
   useEffect(() => {
     if (!texture) return
 
-    const mugMaterialParams =
-      getMugMaterialParams(
+    const printParams =
+      getPrintMaterialParams(
+        config.material,
         mugShine
       )
 
-
     /*
-      ARTE DAS CANECAS
+      ARTE DA PEÇA
     */
-    const mugPrintMaterial =
+    const printMaterial =
       new THREE.MeshPhysicalMaterial({
         map: texture,
-
-        color:
-          new THREE.Color(
-            0xffffff
-          ),
-
-        ...mugMaterialParams,
-
+        color: new THREE.Color(0xffffff),
+        ...printParams,
         side: THREE.DoubleSide,
       })
 
@@ -526,9 +644,7 @@ function Mug({
       mantendo as cores originais.
     */
     const paperTexture =
-      createPaperTexture(
-        texture
-      )
+      createPaperTexture(texture)
 
 
     /*
@@ -542,14 +658,12 @@ function Mug({
     const paperPrintMaterial =
       new THREE.MeshBasicMaterial({
         map: paperTexture,
-
-        color:
-          new THREE.Color(
-            0xffffff
-          ),
-
+        color: new THREE.Color(0xffffff),
         side: THREE.DoubleSide,
       })
+
+
+    const printTargets = config.printTargets || null
 
 
     group.traverse((child) => {
@@ -559,43 +673,29 @@ function Mug({
         baseName(child.name)
 
 
-      /*
-        ARTE NAS CANECAS
-      */
-      if (name === 'print') {
+      const isPrintTarget =
+        printTargets
+          ? printTargets.includes(name)
+          : isPrintPartName(name) && !isLooseSheetName(name)
+
+      if (isPrintTarget) {
         child.visible = true
-
-        child.material =
-          mugPrintMaterial
-
-        child.material.needsUpdate =
-          true
-
+        child.material = printMaterial
+        child.material.needsUpdate = true
         return
       }
 
 
-      /*
-        ARTE NAS FOLHAS
-      */
-      if (
-        modelId === 'trioPaper' &&
-        name !== 'print' &&
-        name.startsWith('print')
-      ) {
+      if (config.hasPaper && isLooseSheetName(name)) {
         child.visible = true
-
-        child.material =
-          paperPrintMaterial
-
-        child.material.needsUpdate =
-          true
+        child.material = paperPrintMaterial
+        child.material.needsUpdate = true
       }
     })
 
 
     return () => {
-      mugPrintMaterial.dispose()
+      printMaterial.dispose()
       paperPrintMaterial.dispose()
 
       if (paperTexture) {
@@ -606,7 +706,7 @@ function Mug({
   }, [
     group,
     texture,
-    modelId,
+    config,
     mugShine,
   ])
 

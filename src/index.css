@@ -552,6 +552,33 @@ h4 {
    SELETOR DE CANECAS
 ========================================================= */
 
+.mug-group {
+
+  margin-bottom: 14px;
+}
+
+.mug-group:last-child {
+
+  margin-bottom: 0;
+}
+
+.mug-group-title {
+
+  display: block;
+
+  font-size: 0.68rem;
+
+  font-weight: 700;
+
+  letter-spacing: 0.04em;
+
+  text-transform: uppercase;
+
+  color: var(--text-muted);
+
+  margin-bottom: 6px;
+}
+
 .mug-selector {
 
   display: grid;

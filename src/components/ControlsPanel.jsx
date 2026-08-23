@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { clamp01, getImageLayout } from '../utils/exportLayout.js'
 import { useToast } from './Toast.jsx'
+import { MODELS, MODEL_GROUPS, getModel } from '../config/models.js'
 
 
 /*
@@ -436,28 +437,17 @@ export default function ControlsPanel({
   const completedSteps = steps.filter((s) => s.done).length
 
 
-  const models = [
-    {
-      id: 'single',
-      number: '1',
-      label: 'Caneca',
-    },
-    {
-      id: 'duo',
-      number: '2',
-      label: 'Canecas',
-    },
-    {
-      id: 'trio',
-      number: '3',
-      label: 'Canecas',
-    },
-    {
-      id: 'trioPaper',
-      number: '3',
-      label: 'Canecas + Folha',
-    },
-  ]
+  /*
+    Lista de modelos vem do catálogo central (src/config/models.js),
+    agrupada por categoria (Canecas, Vestuário, Casa, Acessórios,
+    Bebidas) para ficar navegável mesmo com dezenas de opções.
+  */
+  const modelsByGroup = MODEL_GROUPS.map((group) => ({
+    group,
+    items: Object.values(MODELS).filter((m) => m.group === group),
+  })).filter((g) => g.items.length > 0)
+
+  const activeModel = getModel(modelId)
 
 
   return (
@@ -519,34 +509,46 @@ export default function ControlsPanel({
         description="Escolha o modelo de caneca"
       >
 
-        <div className="mug-selector">
+        {modelsByGroup.map(({ group, items }) => (
 
-          {models.map((model) => (
+          <div key={group} className="mug-group">
 
-            <button
-              key={model.id}
-              type="button"
-              className={
-                modelId === model.id
-                  ? 'mug-option active'
-                  : 'mug-option'
-              }
-              onClick={() => setModelId(model.id)}
-            >
+            <span className="mug-group-title">
+              {group}
+            </span>
 
-              <span className="mug-number">
-                {model.number}
-              </span>
+            <div className="mug-selector">
 
-              <span>
-                {model.label}
-              </span>
+              {items.map((model) => (
 
-            </button>
+                <button
+                  key={model.id}
+                  type="button"
+                  className={
+                    modelId === model.id
+                      ? 'mug-option active'
+                      : 'mug-option'
+                  }
+                  onClick={() => setModelId(model.id)}
+                >
 
-          ))}
+                  <span className="mug-number">
+                    {model.count}
+                  </span>
 
-        </div>
+                  <span>
+                    {model.shortName}
+                  </span>
+
+                </button>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        ))}
 
       </Section>
 
@@ -1275,7 +1277,9 @@ export default function ControlsPanel({
           <label className="color-row">
 
             <span>
-              Corpo externo
+              {activeModel.hasHandle || activeModel.hasInside
+                ? 'Corpo externo'
+                : 'Cor principal'}
             </span>
 
             <div className="color-input">
@@ -1300,60 +1304,68 @@ export default function ControlsPanel({
           </label>
 
 
-          <label className="color-row">
+          {activeModel.hasHandle && (
 
-            <span>
-              Alça
-            </span>
-
-            <div className="color-input">
-
-              <input
-                type="color"
-                value={mugColors.handle}
-                onChange={(e) =>
-                  setMugColors((c) => ({
-                    ...c,
-                    handle: e.target.value,
-                  }))
-                }
-              />
+            <label className="color-row">
 
               <span>
-                {mugColors.handle.toUpperCase()}
+                Alça
               </span>
 
-            </div>
+              <div className="color-input">
 
-          </label>
+                <input
+                  type="color"
+                  value={mugColors.handle}
+                  onChange={(e) =>
+                    setMugColors((c) => ({
+                      ...c,
+                      handle: e.target.value,
+                    }))
+                  }
+                />
+
+                <span>
+                  {mugColors.handle.toUpperCase()}
+                </span>
+
+              </div>
+
+            </label>
+
+          )}
 
 
-          <label className="color-row">
+          {activeModel.hasInside && (
 
-            <span>
-              Parte interna
-            </span>
-
-            <div className="color-input">
-
-              <input
-                type="color"
-                value={mugColors.inside}
-                onChange={(e) =>
-                  setMugColors((c) => ({
-                    ...c,
-                    inside: e.target.value,
-                  }))
-                }
-              />
+            <label className="color-row">
 
               <span>
-                {mugColors.inside.toUpperCase()}
+                Parte interna
               </span>
 
-            </div>
+              <div className="color-input">
 
-          </label>
+                <input
+                  type="color"
+                  value={mugColors.inside}
+                  onChange={(e) =>
+                    setMugColors((c) => ({
+                      ...c,
+                      inside: e.target.value,
+                    }))
+                  }
+                />
+
+                <span>
+                  {mugColors.inside.toUpperCase()}
+                </span>
+
+              </div>
+
+            </label>
+
+          )}
 
         </div>
 

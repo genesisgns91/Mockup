@@ -3,6 +3,7 @@ import MugScene, { ROTATE_SECONDS } from './components/MugScene.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
 import { useToast } from './components/Toast.jsx'
 import { clamp01, getImageLayout } from './utils/exportLayout.js'
+import { getModel, DEFAULT_MODEL_ID } from './config/models.js'
 
 
 function downloadBlob(blob, filename) {
@@ -482,7 +483,7 @@ export default function App() {
 
 
   const [modelId, setModelId] =
-    useState('single')
+    useState(DEFAULT_MODEL_ID)
 
   const [warning, setWarning] =
     useState(null)
@@ -937,17 +938,7 @@ const [videoEffect, setVideoEffect] =
 
             <div className="scene-badge">
 
-              {modelId === 'single' &&
-                '1 caneca'}
-
-              {modelId === 'duo' &&
-                '2 canecas'}
-
-              {modelId === 'trio' &&
-                '3 canecas'}
-
-              {modelId === 'trioPaper' &&
-                '3 canecas + folha'}
+              {getModel(modelId).name}
 
             </div>
 
