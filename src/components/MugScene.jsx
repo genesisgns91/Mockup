@@ -271,12 +271,110 @@ function isLooseSheetName(name) {
 }
 
 
+function createColorMaterial(materialKind, hexColor, shine, extra = {}) {
+  return new THREE.MeshPhysicalMaterial({
+    color: new THREE.Color(hexColor),
+    ...getMaterialParams(materialKind, shine),
+    side: THREE.DoubleSide,
+    ...extra,
+  })
+}
+
+
+/*
+  ==========================================================
+  FAIXA COM GLITTER
+
+  Gera uma textura procedural (não depende da arte anexada
+  pelo usuário): a cor escolhida + centenas de pontinhos claros
+  espalhados, repetida ao redor da peça (RepeatWrapping) para
+  cobrir os 360° com densidade uniforme, sem precisar calibrar
+  medidas reais como a arte anexada.
+  ==========================================================
+*/
+function createGlitterTexture(hexColor) {
+  const size = 512
+
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+
+  const ctx = canvas.getContext('2d')
+
+  ctx.fillStyle = hexColor || '#d4af37'
+  ctx.fillRect(0, 0, size, size)
+
+  const speckCount = 2600
+
+  for (let i = 0; i < speckCount; i++) {
+    const x = Math.random() * size
+    const y = Math.random() * size
+    const r = Math.random() * 1.6 + 0.25
+    const brightness = 0.45 + Math.random() * 0.55
+
+    ctx.beginPath()
+    ctx.arc(x, y, r, 0, Math.PI * 2)
+    ctx.fillStyle = `rgba(255,255,255,${brightness})`
+    ctx.fill()
+  }
+
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = THREE.RepeatWrapping
+  tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(7, 1.3)
+  tex.anisotropy = 8
+  tex.needsUpdate = true
+
+  return tex
+}
+
+
+/*
+  Componente "invisível" (não desenha nada) cujo único trabalho é
+  chamar o hook useDecalTexture para UMA zona de arte e devolver o
+  resultado pro componente Mug via callback. Existe porque um modelo
+  pode ter várias zonas de arte (frente/verso, caneca 1/caneca 2...)
+  e hooks não podem ser chamados um número variável de vezes — cada
+  zona ganha sua própria instância deste componente.
+*/
+function ZoneTexture({
+  zone,
+  artZone,
+  measurement,
+  baseColor,
+  onTexture,
+}) {
+  const { texture, warning } = useDecalTexture({
+    artImage: artZone?.image,
+    artWidthMM: artZone?.widthMM,
+    artHeightMM: artZone?.heightMM,
+    offsetXMM: artZone?.offsetXMM,
+    offsetYMM: artZone?.offsetYMM,
+    mode: zone.mode,
+    radiusUnits: measurement?.radiusUnits,
+    widthUnits: measurement?.widthUnits,
+    heightUnits: measurement?.heightUnits,
+    realHeightMM: artZone?.mugRealHeightMM,
+    baseColor,
+  })
+
+  useEffect(() => {
+    onTexture(zone.key, texture, warning)
+  }, [zone.key, texture, warning, onTexture])
+
+  return null
+}
+
+
 function Mug({
-  art,
-  mugColors,
+  artZones,
+  partColors,
+  glassOpacity,
   mugShine,
   modelId,
   onFrame,
+  onWarning,
 }) {
   const config = getModel(modelId)
 
@@ -290,10 +388,43 @@ function Mug({
     [obj]
   )
 
+  // { [zoneKey]: { mode, radiusUnits, widthUnits, heightUnits } }
   const [measurements, setMeasurements] =
-    useState(null)
+    useState({})
+
+  // { [zoneKey]: { texture, warning } }
+  const [zoneTextures, setZoneTextures] =
+    useState({})
 
   const groupRef = useRef(null)
+
+  const bodyColorPart =
+    config.colorParts[0]
+
+  const bodyColorHex =
+    partColors[bodyColorPart.key] ||
+    bodyColorPart.default
+
+
+  const handleZoneTexture = useMemo(() => {
+    return (key, texture, warning) => {
+      setZoneTextures((prev) => {
+        const current = prev[key]
+
+        if (
+          current?.texture === texture &&
+          current?.warning === warning
+        ) {
+          return prev
+        }
+
+        return {
+          ...prev,
+          [key]: { texture, warning },
+        }
+      })
+    }
+  }, [])
 
 
   useEffect(() => {
@@ -325,110 +456,95 @@ function Mug({
   }, [group, onFrame])
 
 
+  /*
+    PASSO 1 — ESTRUTURAL
+
+    Percorre todas as peças do modelo e, para cada uma, decide o
+    que ela é: oculta (pivot/decal), folha solta (papel), faixa de
+    glitter, peça de cor fixa (ferragem), peça colorível (com sua
+    própria cor), ou zona de arte (medida aqui, o material entra
+    no passo 2 assim que a textura ficar pronta).
+  */
   useEffect(() => {
-    const bodyParams = {
-      ...getMaterialParams(config.material, mugShine),
-      ...(config.materialBoost || {}),
-    }
-
-    const neutralParams =
-      getMaterialParams(config.material, mugShine)
-
-
-    const bodyMaterial =
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(mugColors.body),
-        ...bodyParams,
-        side: THREE.DoubleSide,
-      })
-
-
-    const insideMaterial =
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(mugColors.inside),
-        ...neutralParams,
-        side: THREE.DoubleSide,
-      })
-
-
-    const handleMaterial =
-      new THREE.MeshPhysicalMaterial({
-        color: new THREE.Color(mugColors.handle),
-        ...neutralParams,
-        side: THREE.DoubleSide,
-      })
-
-
     const paperMaterial =
       new THREE.MeshStandardMaterial(
         getPaperMaterialParams()
       )
 
-    /*
-      Materiais de "peças especiais" (metal, plástico, vidro, espuma...)
-      declarados em config.partOverrides. Criados sob demanda e
-      reaproveitados entre peças do mesmo tipo dentro do mesmo modelo.
-    */
-    const overrideMaterials = new Map()
+    const colorMaterials = new Map()
 
-    function getOverrideMaterial(materialKind) {
-      if (!overrideMaterials.has(materialKind)) {
-        overrideMaterials.set(
-          materialKind,
-          new THREE.MeshPhysicalMaterial({
-            color: new THREE.Color(mugColors.body),
-            ...getMaterialParams(materialKind, mugShine),
-            side: THREE.DoubleSide,
-          })
+    for (const part of config.colorParts) {
+      colorMaterials.set(
+        part.key,
+        createColorMaterial(
+          part.material,
+          partColors[part.key] || part.default,
+          mugShine
         )
-      }
-
-      return overrideMaterials.get(materialKind)
+      )
     }
 
+    const fixedMaterials = new Map()
 
-    const printTargets = config.printTargets || null
+    for (const part of config.fixedParts || []) {
+      const mat = createColorMaterial(
+        part.material,
+        part.color,
+        mugShine
+      )
 
-    let printRadiusUnits = null
-    let printHeightUnits = null
-    let printWidthUnits = null
+      for (const name of part.meshNames) {
+        fixedMaterials.set(name, mat)
+      }
+    }
 
+    let glitterMaterial = null
+    let glitterTexture = null
+
+    if (config.glitterBand) {
+      const glitterColorHex =
+        partColors[config.glitterBand.colorKey] ||
+        config.colorParts.find(
+          (p) => p.key === config.glitterBand.colorKey
+        )?.default ||
+        '#d4af37'
+
+      glitterTexture =
+        createGlitterTexture(glitterColorHex)
+
+      glitterMaterial =
+        new THREE.MeshPhysicalMaterial({
+          map: glitterTexture,
+          color: new THREE.Color(0xffffff),
+          metalness: 0.15,
+          roughness: 0.26,
+          clearcoat: 0.9,
+          clearcoatRoughness: 0.12,
+          envMapIntensity: 1.3,
+          side: THREE.DoubleSide,
+        })
+    }
+
+    const nextMeasurements = {}
+    const measuredZones = new Set()
 
     group.traverse((child) => {
       if (!child.isMesh) return
 
-      const name =
-        baseName(child.name)
-
-      const override =
-        config.partOverrides?.[name]
-
-
-      if (name === 'pivot' || override === MATERIAL.HIDDEN) {
-        child.visible = false
-        return
-      }
-
+      const rawName = child.name
+      const name = baseName(rawName)
 
       child.castShadow = true
       child.receiveShadow = true
 
-
-      if (name === 'decal') {
+      // --- peças ocultas -------------------------------------
+      if (name === 'pivot' || rawName === 'decal') {
         child.visible = false
         return
       }
 
-
-      const isLooseSheet =
-        isLooseSheetName(name)
-
-      if (isLooseSheet) {
-        /*
-          Folha solta (só existe visualmente em modelos com "hasPaper",
-          ex: trioPaper). Nos demais modelos que compartilham o mesmo
-          .obj de base, ela fica escondida.
-        */
+      // --- folha solta (só existe visível em hasPaper) --------
+      if (isLooseSheetName(name)) {
         if (config.hasPaper) {
           child.visible = true
           child.material = paperMaterial
@@ -438,20 +554,27 @@ function Mug({
         return
       }
 
+      // --- faixa de glitter ------------------------------------
+      if (
+        config.glitterBand &&
+        config.glitterBand.meshNames.includes(name)
+      ) {
+        child.visible = true
+        child.material = glitterMaterial
+        return
+      }
 
-      const isPrintTarget =
-        printTargets
-          ? printTargets.includes(name)
-          : isPrintPartName(name)
+      // --- zona de arte (medida agora, material no passo 2) ---
+      const zone = config.printZones.find((z) =>
+        z.meshNames.includes(rawName)
+      )
 
-      if (isPrintTarget) {
-        /*
-          ÁREA DE IMPRESSÃO
+      if (zone) {
+        child.visible = true
 
-          Medida uma única vez (na primeira peça encontrada) e reusada
-          para as demais cópias do mesmo tipo (ex: as 3 canecas do trio).
-        */
-        if (printHeightUnits === null) {
+        if (!measuredZones.has(zone.key)) {
+          measuredZones.add(zone.key)
+
           const pos =
             child.geometry.attributes.position
 
@@ -464,7 +587,6 @@ function Mug({
 
           let sumX = 0
           let sumZ = 0
-
 
           for (let i = 0; i < pos.count; i++) {
             const x = pos.getX(i)
@@ -482,34 +604,39 @@ function Mug({
             sumZ += z
           }
 
+          const mode =
+            zone.mode || PRINT_MODE.CYLINDRICAL
 
-          if (config.printMode === PRINT_MODE.FLAT) {
+          if (mode === PRINT_MODE.FLAT) {
             /*
-              Peça "plana" pode estar de pé (camiseta, almofada, azulejo
-              — a face olha para o eixo Z, então a largura vem de X e a
-              altura de Y) OU deitada (mousepad — a face olha para cima,
-              eixo Y, então a largura vem de X e a "altura" (a outra
-              direção da estampa) vem de Z). Detectamos automaticamente
-              qual é o eixo "fino" (a espessura da peça) e usamos os
-              outros dois como largura/altura, para nunca dividir por
-              uma variação quase zero.
+              Painel "de pé" (camiseta/almofada/azulejo: a face olha
+              para Z, largura=X, altura=Y) ou "deitado" (mousepad: a
+              face olha para cima, largura=X, altura=Z). O eixo mais
+              fino é a espessura da peça — os outros dois viram
+              largura/altura.
             */
             const rangeX = maxX - minX
             const rangeY = maxY - minY
             const rangeZ = maxZ - minZ
 
             if (rangeY <= rangeX && rangeY <= rangeZ) {
-              // eixo fino = Y (peça deitada, ex: mousepad)
-              printWidthUnits = rangeX
-              printHeightUnits = rangeZ
+              nextMeasurements[zone.key] = {
+                mode,
+                widthUnits: rangeX,
+                heightUnits: rangeZ,
+              }
             } else if (rangeZ <= rangeX && rangeZ <= rangeY) {
-              // eixo fino = Z (peça de pé, ex: camiseta/almofada/azulejo)
-              printWidthUnits = rangeX
-              printHeightUnits = rangeY
+              nextMeasurements[zone.key] = {
+                mode,
+                widthUnits: rangeX,
+                heightUnits: rangeY,
+              }
             } else {
-              // eixo fino = X (raro)
-              printWidthUnits = rangeZ
-              printHeightUnits = rangeY
+              nextMeasurements[zone.key] = {
+                mode,
+                widthUnits: rangeZ,
+                heightUnits: rangeY,
+              }
             }
           } else {
             const centerX = sumX / pos.count
@@ -523,199 +650,235 @@ function Mug({
               rSum += Math.hypot(x, z)
             }
 
-            printRadiusUnits = rSum / pos.count
-            printHeightUnits = maxY - minY
+            nextMeasurements[zone.key] = {
+              mode,
+              radiusUnits: rSum / pos.count,
+              heightUnits: maxY - minY,
+            }
           }
         }
 
         return
       }
 
-
-      if (override) {
-        child.material =
-          getOverrideMaterial(override)
-
+      // --- peça de cor fixa (ferragem) ------------------------
+      if (fixedMaterials.has(name)) {
+        child.visible = true
+        child.material = fixedMaterials.get(name)
         return
       }
 
+      // --- peça colorível --------------------------------------
+      const colorPart = config.colorParts.find(
+        (p) => p.key !== 'body' && p.meshNames.includes(name)
+      )
 
-      /*
-        endsWith (em vez de ===) para também cobrir nomes compostos
-        como "heart_mug_inside" / "mug_handle" (ex: caneca casal),
-        sem confundir com peças tipo "handle_chrome" ou
-        "handle_support" (que não TERMINAM em handle/inside).
-      */
-      if (name.endsWith('inside') || name.includes('interior')) {
-        child.material = insideMaterial
-        return
-      }
-
-
-      if (name.endsWith('handle')) {
-        child.material = handleMaterial
-        return
-      }
-
-
-      child.material = bodyMaterial
+      child.visible = true
+      child.material = colorMaterials.get(
+        colorPart ? colorPart.key : 'body'
+      )
     })
 
+    setMeasurements((prev) => {
+      const prevKeys = Object.keys(prev)
+      const nextKeys = Object.keys(nextMeasurements)
 
-    if (printHeightUnits !== null) {
-      setMeasurements({
-        mode: config.printMode,
-        radiusUnits: printRadiusUnits,
-        widthUnits: printWidthUnits,
-        heightUnits: printHeightUnits,
-      })
-    } else {
-      setMeasurements(null)
+      const same =
+        prevKeys.length === nextKeys.length &&
+        nextKeys.every((k) => {
+          const a = prev[k]
+          const b = nextMeasurements[k]
+          return (
+            a &&
+            a.mode === b.mode &&
+            a.radiusUnits === b.radiusUnits &&
+            a.widthUnits === b.widthUnits &&
+            a.heightUnits === b.heightUnits
+          )
+        })
+
+      return same ? prev : nextMeasurements
+    })
+
+    /*
+      TRANSPARÊNCIA (vidro)
+
+      Aplicada por cima do material já criado para a colorPart
+      indicada em config.glassOpacity — não muda a peça impressa
+      (a arte continua opaca e legível, ver getPrintMaterialParams).
+    */
+    if (config.glassOpacity) {
+      const mat = colorMaterials.get(
+        config.glassOpacity.key
+      )
+
+      if (mat) {
+        const amount = Math.max(
+          0,
+          Math.min(1, Number(glassOpacity ?? config.glassOpacity.default))
+        )
+
+        mat.transmission = amount * 0.95
+        mat.transparent = true
+        mat.opacity = 1
+        mat.needsUpdate = true
+      }
     }
 
-
     return () => {
-      bodyMaterial.dispose()
-      insideMaterial.dispose()
-      handleMaterial.dispose()
       paperMaterial.dispose()
+      colorMaterials.forEach((m) => m.dispose())
+      fixedMaterials.forEach((m) => m.dispose())
 
-      overrideMaterials.forEach((m) => m.dispose())
+      if (glitterMaterial) glitterMaterial.dispose()
+      if (glitterTexture) glitterTexture.dispose()
     }
 
   }, [
     group,
     config,
     mugShine,
-    mugColors.body,
-    mugColors.inside,
-    mugColors.handle,
+    partColors,
+    glassOpacity,
   ])
 
 
-  const {
-    texture,
-    warning,
-  } = useDecalTexture({
-    artImage: art.image,
-    artWidthMM: art.widthMM,
-    artHeightMM: art.heightMM,
-    offsetXMM: art.offsetXMM,
-    offsetYMM: art.offsetYMM,
-    mode: measurements?.mode || config.printMode,
-    radiusUnits: measurements?.radiusUnits,
-    widthUnits: measurements?.widthUnits,
-    heightUnits: measurements?.heightUnits,
-    realHeightMM: art.mugRealHeightMM,
-    baseColor: mugColors.body,
-  })
+  /*
+    PASSO 2 — TEXTURA DE CADA ZONA
+
+    Um <ZoneTexture> "invisível" por zona de arte, que devolve a
+    textura pronta (ou o aviso de largura excedida) pro estado
+    zoneTextures assim que estiver disponível.
+  */
+  const zoneNodes = config.printZones.map((zone) => (
+    <ZoneTexture
+      key={zone.key}
+      zone={zone}
+      artZone={artZones[zone.key]}
+      measurement={measurements[zone.key]}
+      baseColor={bodyColorHex}
+      onTexture={handleZoneTexture}
+    />
+  ))
 
 
   useEffect(() => {
-    art.onWarning?.(warning)
-  }, [warning, art])
+    const messages = config.printZones
+      .map((zone) => {
+        const w = zoneTextures[zone.key]?.warning
+        return w ? `${zone.label}: ${w}` : null
+      })
+      .filter(Boolean)
+
+    onWarning?.(messages.length ? messages.join(' | ') : null)
+  }, [zoneTextures, config, onWarning])
 
 
   useEffect(() => {
-    if (!texture) return
+    const printMaterialKind =
+      bodyColorPart.material
 
     const printParams =
       getPrintMaterialParams(
-        config.material,
+        printMaterialKind,
         mugShine
       )
 
-    /*
-      ARTE DA PEÇA
-    */
-    const printMaterial =
-      new THREE.MeshPhysicalMaterial({
-        map: texture,
-        color: new THREE.Color(0xffffff),
-        ...printParams,
-        side: THREE.DoubleSide,
-      })
+    const zoneMaterials = new Map()
 
+    for (const zone of config.printZones) {
+      const entry = zoneTextures[zone.key]
+      if (!entry?.texture) continue
 
-    /*
-      TEXTURA DA FOLHA
-
-      Cópia independente,
-      mantendo as cores originais.
-    */
-    const paperTexture =
-      createPaperTexture(texture)
-
+      zoneMaterials.set(
+        zone.key,
+        new THREE.MeshPhysicalMaterial({
+          map: entry.texture,
+          color: new THREE.Color(0xffffff),
+          ...printParams,
+          side: THREE.DoubleSide,
+        })
+      )
+    }
 
     /*
-      ARTE DA FOLHA
+      TEXTURA/ARTE DA FOLHA SOLTA (trioPaper)
 
-      Totalmente fosca.
-      Sem emissive.
-      Sem alteração de brilho.
-      Sem alteração de cor.
+      Espelha a mesma arte de uma das zonas (config.paperFromZone),
+      totalmente fosca, sem alterar a cor.
     */
-    const paperPrintMaterial =
-      new THREE.MeshBasicMaterial({
-        map: paperTexture,
-        color: new THREE.Color(0xffffff),
-        side: THREE.DoubleSide,
-      })
+    let paperTexture = null
+    let paperPrintMaterial = null
 
+    if (config.hasPaper && config.paperFromZone) {
+      const sourceTexture =
+        zoneTextures[config.paperFromZone]?.texture
 
-    const printTargets = config.printTargets || null
+      if (sourceTexture) {
+        paperTexture = createPaperTexture(sourceTexture)
 
+        paperPrintMaterial = new THREE.MeshBasicMaterial({
+          map: paperTexture,
+          color: new THREE.Color(0xffffff),
+          side: THREE.DoubleSide,
+        })
+      }
+    }
 
     group.traverse((child) => {
       if (!child.isMesh) return
 
-      const name =
-        baseName(child.name)
+      const rawName = child.name
+      const name = baseName(rawName)
 
+      const zone = config.printZones.find((z) =>
+        z.meshNames.includes(rawName)
+      )
 
-      const isPrintTarget =
-        printTargets
-          ? printTargets.includes(name)
-          : isPrintPartName(name) && !isLooseSheetName(name)
-
-      if (isPrintTarget) {
-        child.visible = true
-        child.material = printMaterial
-        child.material.needsUpdate = true
+      if (zone) {
+        const mat = zoneMaterials.get(zone.key)
+        if (mat) {
+          child.material = mat
+          child.material.needsUpdate = true
+        }
         return
       }
 
-
-      if (config.hasPaper && isLooseSheetName(name)) {
-        child.visible = true
+      if (
+        config.hasPaper &&
+        paperPrintMaterial &&
+        isLooseSheetName(name)
+      ) {
         child.material = paperPrintMaterial
         child.material.needsUpdate = true
       }
     })
 
-
     return () => {
-      printMaterial.dispose()
-      paperPrintMaterial.dispose()
+      zoneMaterials.forEach((m) => m.dispose())
 
-      if (paperTexture) {
-        paperTexture.dispose()
-      }
+      if (paperPrintMaterial) paperPrintMaterial.dispose()
+      if (paperTexture) paperTexture.dispose()
     }
 
   }, [
     group,
-    texture,
+    zoneTextures,
     config,
     mugShine,
+    bodyColorPart,
   ])
 
 
   return (
-    <primitive
-      ref={groupRef}
-      object={group}
-    />
+    <>
+      <primitive
+        ref={groupRef}
+        object={group}
+      />
+
+      {zoneNodes}
+    </>
   )
 }
 
@@ -1781,9 +1944,10 @@ const recorder =
 }
 
 export default function MugScene({
-  art,
+  artZones,
   background,
-  mugColors,
+  partColors,
+  glassOpacity,
   mugShine,
   modelId,
   registerApi,
@@ -1791,6 +1955,7 @@ export default function MugScene({
   videoSpeed,
   videoEffect,
   videoQuality,
+  onWarning,
 }) {
   const [frame, setFrame] =
     useState(null)
@@ -1889,11 +2054,13 @@ export default function MugScene({
       >
 
         <Mug
-          art={art}
-          mugColors={mugColors}
+          artZones={artZones}
+          partColors={partColors}
+          glassOpacity={glassOpacity}
           mugShine={mugShine}
           modelId={modelId}
           onFrame={setFrame}
+          onWarning={onWarning}
         />
 
       </group>

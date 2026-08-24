@@ -284,12 +284,15 @@ function BackgroundPositionPreview({ background, setBackground }) {
 
 
 export default function ControlsPanel({
-  art,
-  setArt,
+  artZones,
+  setArtZones,
   background,
   setBackground,
-  mugColors,
-  setMugColors,
+  partColors,
+  setPartColors,
+
+  glassOpacity,
+  setGlassOpacity,
 
   mugShine,
   setMugShine,
@@ -303,7 +306,7 @@ export default function ControlsPanel({
     useState(false)
 
   const [artDragActive, setArtDragActive] =
-    useState(false)
+    useState({})
 
   const [bgDragActive, setBgDragActive] =
     useState(false)
@@ -311,7 +314,7 @@ export default function ControlsPanel({
   const toast = useToast()
 
 
-  const processArtFile = (file) => {
+  const processArtFile = (zoneKey, file) => {
 
     if (!file) return
 
@@ -325,7 +328,8 @@ export default function ControlsPanel({
     const img = new Image()
 
     img.onload = () => {
-      setArt((a) => {
+      setArtZones((zones) => {
+        const zone = zones[zoneKey] || {}
 
         /*
           Avisa quando a imagem enviada tem poucos pixels
@@ -334,8 +338,8 @@ export default function ControlsPanel({
           exportar.
         */
         const pxPerMm = Math.min(
-          img.naturalWidth / a.widthMM,
-          img.naturalHeight / a.heightMM
+          img.naturalWidth / (zone.widthMM || 210),
+          img.naturalHeight / (zone.heightMM || 92)
         )
 
         if (pxPerMm < MIN_PX_PER_MM) {
@@ -346,9 +350,12 @@ export default function ControlsPanel({
         }
 
         return {
-          ...a,
-          image: img,
-          fileName: file.name,
+          ...zones,
+          [zoneKey]: {
+            ...zone,
+            image: img,
+            fileName: file.name,
+          },
         }
       })
     }
@@ -386,8 +393,8 @@ export default function ControlsPanel({
   }
 
 
-  const handleArtUpload = (e) => {
-    processArtFile(e.target.files?.[0])
+  const handleArtUpload = (zoneKey, e) => {
+    processArtFile(zoneKey, e.target.files?.[0])
   }
 
 
@@ -418,8 +425,17 @@ export default function ControlsPanel({
     },
   })
 
-  const artDropHandlers = makeDropHandlers(setArtDragActive, processArtFile)
+  const makeZoneDropHandlers = (zoneKey) =>
+    makeDropHandlers(
+      (active) =>
+        setArtDragActive((prev) => ({ ...prev, [zoneKey]: active })),
+      (file) => processArtFile(zoneKey, file)
+    )
+
   const bgDropHandlers = makeDropHandlers(setBgDragActive, processBackgroundFile)
+
+
+  const activeModel = getModel(modelId)
 
 
   /*
@@ -429,7 +445,13 @@ export default function ControlsPanel({
   */
   const steps = [
     { id: 'model', label: 'Modelo', done: Boolean(modelId) },
-    { id: 'art', label: 'Arte', done: Boolean(art.fileName) },
+    {
+      id: 'art',
+      label: 'Arte',
+      done: activeModel.printZones.some(
+        (zone) => Boolean(artZones[zone.key]?.fileName)
+      ),
+    },
     { id: 'background', label: 'Fundo', done: background.type === 'image' ? Boolean(background.image) : true },
     { id: 'colors', label: 'Cores', done: true },
   ]
@@ -446,8 +468,6 @@ export default function ControlsPanel({
     group,
     items: Object.values(MODELS).filter((m) => m.group === group),
   })).filter((g) => g.items.length > 0)
-
-  const activeModel = getModel(modelId)
 
 
   return (
@@ -560,336 +580,359 @@ export default function ControlsPanel({
       <Section
         icon="✦"
         title="Sua arte"
-        description="Imagem e posicionamento"
+        description={
+          activeModel.printZones.length > 1
+            ? `${activeModel.printZones.length} áreas de impressão nesta peça`
+            : 'Imagem e posicionamento'
+        }
       >
 
-        <label
-          className={`upload-area${artDragActive ? ' drag-active' : ''}`}
-          {...artDropHandlers}
-        >
-
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleArtUpload}
-            hidden
-          />
-
-          {art.fileName ? (
-
-            <div className="uploaded-art">
-
-              <div className="upload-check">
-                ✓
-              </div>
-
-              <div className="upload-info">
-
-                <strong>
-                  Arte carregada
-                </strong>
-
-                <span>
-                  {art.fileName}
-                </span>
-
-              </div>
-
-              <span className="upload-change">
-                Trocar
-              </span>
-
-            </div>
-
-          ) : (
-
-            <div className="upload-empty">
-
-              <span className="upload-icon">
-                ↑
-              </span>
-
-              <strong>
-                Enviar sua arte
-              </strong>
-
-              <span>
-                Arraste aqui ou clique · PNG, JPG ou WEBP
-              </span>
-
-            </div>
-
-          )}
-
-        </label>
-
-
-        <div className="field-group">
-
-          <div className="field-label">
-
-            <span>
-              Tamanho da arte
-            </span>
-
-            <small>
-              milímetros
-            </small>
-
-          </div>
-
-
-          <div className="input-grid">
-
-            <label className="input-field">
-
-              <span>
-                Largura
-              </span>
-
-              <div className="number-input">
-
-                <input
-                  type="number"
-                  value={art.widthMM}
-                  min={10}
-                  max={400}
-                  onChange={(e) =>
-                    setArt((a) => ({
-                      ...a,
-                      widthMM: Number(
-                        e.target.value
-                      ),
-                    }))
-                  }
-                />
-
-                <span>
-                  mm
-                </span>
-
-              </div>
-
-            </label>
-
-
-            <label className="input-field">
-
-              <span>
-                Altura
-              </span>
-
-              <div className="number-input">
-
-                <input
-                  type="number"
-                  value={art.heightMM}
-                  min={10}
-                  max={200}
-                  onChange={(e) =>
-                    setArt((a) => ({
-                      ...a,
-                      heightMM: Number(
-                        e.target.value
-                      ),
-                    }))
-                  }
-                />
-
-                <span>
-                  mm
-                </span>
-
-              </div>
-
-            </label>
-
-          </div>
-
-        </div>
-
-
-        {/* HORIZONTAL */}
-
-        <div className="range-field">
-
-          <div className="range-header">
-
-            <span>
-              Posição horizontal
-            </span>
-
-            <span className="range-header-actions">
-
-              <strong>
-                {art.offsetXMM} mm
-              </strong>
-
-              {art.offsetXMM !== 0 && (
-                <button
-                  type="button"
-                  className="range-reset"
-                  onClick={() =>
-                    setArt((a) => ({ ...a, offsetXMM: 0 }))
-                  }
-                  aria-label="Centralizar posição horizontal"
-                  title="Centralizar"
-                >
-                  ⟲
-                </button>
-              )}
-
-            </span>
-
-          </div>
-
-          <input
-            type="range"
-            min="-60"
-            max="60"
-            value={art.offsetXMM}
-            onChange={(e) =>
-              setArt((a) => ({
-                ...a,
-                offsetXMM: Number(
-                  e.target.value
-                ),
-              }))
-            }
-          />
-
-          <div className="range-limits">
-            <span>−60</span>
-            <span>0</span>
-            <span>+60</span>
-          </div>
-
-        </div>
-
-
-        {/* VERTICAL */}
-
-        <div className="range-field">
-
-          <div className="range-header">
-
-            <span>
-              Posição vertical
-            </span>
-
-            <span className="range-header-actions">
-
-              <strong>
-                {art.offsetYMM} mm
-              </strong>
-
-              {art.offsetYMM !== 0 && (
-                <button
-                  type="button"
-                  className="range-reset"
-                  onClick={() =>
-                    setArt((a) => ({ ...a, offsetYMM: 0 }))
-                  }
-                  aria-label="Centralizar posição vertical"
-                  title="Centralizar"
-                >
-                  ⟲
-                </button>
-              )}
-
-            </span>
-
-          </div>
-
-          <input
-            type="range"
-            min="-20"
-            max="20"
-            value={art.offsetYMM}
-            onChange={(e) =>
-              setArt((a) => ({
-                ...a,
-                offsetYMM: Number(
-                  e.target.value
-                ),
-              }))
-            }
-          />
-
-          <div className="range-limits">
-            <span>−20</span>
-            <span>0</span>
-            <span>+20</span>
-          </div>
-
-        </div>
-
-
-        {/* CALIBRAÇÃO */}
-
-        <button
-          type="button"
-          className="advanced-toggle"
-          onClick={() =>
-            setShowCalibration((value) => !value)
+        {activeModel.printZones.map((zone, zoneIndex) => {
+          const zoneArt = artZones[zone.key] || {
+            image: null,
+            fileName: null,
+            widthMM: 210,
+            heightMM: 92,
+            offsetXMM: 0,
+            offsetYMM: 0,
+            mugRealHeightMM: 95,
           }
-        >
 
-          <span>
-            ⚙ Calibração da caneca
-          </span>
+          const updateZone = (updater) => {
+            setArtZones((zones) => ({
+              ...zones,
+              [zone.key]: {
+                ...(zones[zone.key] || zoneArt),
+                ...updater(zones[zone.key] || zoneArt),
+              },
+            }))
+          }
 
-          <span>
-            {showCalibration ? '−' : '+'}
-          </span>
+          return (
+            <div
+              key={zone.key}
+              className="art-zone-block"
+              style={
+                zoneIndex > 0
+                  ? { marginTop: '22px', paddingTop: '22px', borderTop: '1px dashed var(--border-soft, #e2dccf)' }
+                  : undefined
+              }
+            >
 
-        </button>
+              {activeModel.printZones.length > 1 && (
+                <div className="field-label">
+                  <span>{zone.label}</span>
+                </div>
+              )}
 
-
-        {showCalibration && (
-
-          <div className="calibration-box">
-
-            <label className="input-field">
-
-              <span>
-                Altura real da caneca
-              </span>
-
-              <div className="number-input">
+              <label
+                className={`upload-area${artDragActive[zone.key] ? ' drag-active' : ''}`}
+                {...makeZoneDropHandlers(zone.key)}
+              >
 
                 <input
-                  type="number"
-                  value={art.mugRealHeightMM}
-                  min={60}
-                  max={140}
-                  onChange={(e) =>
-                    setArt((a) => ({
-                      ...a,
-                      mugRealHeightMM:
-                        Number(
-                          e.target.value
-                        ),
-                    }))
-                  }
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleArtUpload(zone.key, e)}
+                  hidden
                 />
 
-                <span>
-                  mm
-                </span>
+                {zoneArt.fileName ? (
+
+                  <div className="uploaded-art">
+
+                    <div className="upload-check">
+                      ✓
+                    </div>
+
+                    <div className="upload-info">
+
+                      <strong>
+                        Arte carregada
+                      </strong>
+
+                      <span>
+                        {zoneArt.fileName}
+                      </span>
+
+                    </div>
+
+                    <span className="upload-change">
+                      Trocar
+                    </span>
+
+                  </div>
+
+                ) : (
+
+                  <div className="upload-empty">
+
+                    <span className="upload-icon">
+                      ↑
+                    </span>
+
+                    <strong>
+                      {activeModel.printZones.length > 1
+                        ? `Enviar arte — ${zone.label}`
+                        : 'Enviar sua arte'}
+                    </strong>
+
+                    <span>
+                      Arraste aqui ou clique · PNG, JPG ou WEBP
+                    </span>
+
+                  </div>
+
+                )}
+
+              </label>
+
+
+              <div className="field-group">
+
+                <div className="field-label">
+
+                  <span>
+                    Tamanho da arte
+                  </span>
+
+                  <small>
+                    milímetros
+                  </small>
+
+                </div>
+
+
+                <div className="input-grid">
+
+                  <label className="input-field">
+
+                    <span>
+                      Largura
+                    </span>
+
+                    <div className="number-input">
+
+                      <input
+                        type="number"
+                        value={zoneArt.widthMM}
+                        min={10}
+                        max={400}
+                        onChange={(e) => {
+                          const v = Number(e.target.value)
+                          updateZone(() => ({ widthMM: v }))
+                        }}
+                      />
+
+                      <span>
+                        mm
+                      </span>
+
+                    </div>
+
+                  </label>
+
+
+                  <label className="input-field">
+
+                    <span>
+                      Altura
+                    </span>
+
+                    <div className="number-input">
+
+                      <input
+                        type="number"
+                        value={zoneArt.heightMM}
+                        min={10}
+                        max={200}
+                        onChange={(e) => {
+                          const v = Number(e.target.value)
+                          updateZone(() => ({ heightMM: v }))
+                        }}
+                      />
+
+                      <span>
+                        mm
+                      </span>
+
+                    </div>
+
+                  </label>
+
+                </div>
 
               </div>
 
-            </label>
 
-            <p>
-              Ajuste conforme a altura real da parede
-              da sua caneca para manter a escala da arte.
-            </p>
+              {/* HORIZONTAL */}
 
-          </div>
+              <div className="range-field">
 
-        )}
+                <div className="range-header">
+
+                  <span>
+                    Posição horizontal
+                  </span>
+
+                  <span className="range-header-actions">
+
+                    <strong>
+                      {zoneArt.offsetXMM} mm
+                    </strong>
+
+                    {zoneArt.offsetXMM !== 0 && (
+                      <button
+                        type="button"
+                        className="range-reset"
+                        onClick={() => updateZone(() => ({ offsetXMM: 0 }))}
+                        aria-label="Centralizar posição horizontal"
+                        title="Centralizar"
+                      >
+                        ⟲
+                      </button>
+                    )}
+
+                  </span>
+
+                </div>
+
+                <input
+                  type="range"
+                  min="-60"
+                  max="60"
+                  value={zoneArt.offsetXMM}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    updateZone(() => ({ offsetXMM: v }))
+                  }}
+                />
+
+                <div className="range-limits">
+                  <span>−60</span>
+                  <span>0</span>
+                  <span>+60</span>
+                </div>
+
+              </div>
+
+
+              {/* VERTICAL */}
+
+              <div className="range-field">
+
+                <div className="range-header">
+
+                  <span>
+                    Posição vertical
+                  </span>
+
+                  <span className="range-header-actions">
+
+                    <strong>
+                      {zoneArt.offsetYMM} mm
+                    </strong>
+
+                    {zoneArt.offsetYMM !== 0 && (
+                      <button
+                        type="button"
+                        className="range-reset"
+                        onClick={() => updateZone(() => ({ offsetYMM: 0 }))}
+                        aria-label="Centralizar posição vertical"
+                        title="Centralizar"
+                      >
+                        ⟲
+                      </button>
+                    )}
+
+                  </span>
+
+                </div>
+
+                <input
+                  type="range"
+                  min="-20"
+                  max="20"
+                  value={zoneArt.offsetYMM}
+                  onChange={(e) => {
+                    const v = Number(e.target.value)
+                    updateZone(() => ({ offsetYMM: v }))
+                  }}
+                />
+
+                <div className="range-limits">
+                  <span>−20</span>
+                  <span>0</span>
+                  <span>+20</span>
+                </div>
+
+              </div>
+
+
+              {/* CALIBRAÇÃO */}
+
+              <button
+                type="button"
+                className="advanced-toggle"
+                onClick={() =>
+                  setShowCalibration((value) => !value)
+                }
+              >
+
+                <span>
+                  ⚙ Calibração da peça
+                </span>
+
+                <span>
+                  {showCalibration ? '−' : '+'}
+                </span>
+
+              </button>
+
+
+              {showCalibration && (
+
+                <div className="calibration-box">
+
+                  <label className="input-field">
+
+                    <span>
+                      Altura real da peça
+                    </span>
+
+                    <div className="number-input">
+
+                      <input
+                        type="number"
+                        value={zoneArt.mugRealHeightMM}
+                        min={10}
+                        max={400}
+                        onChange={(e) => {
+                          const v = Number(e.target.value)
+                          updateZone(() => ({ mugRealHeightMM: v }))
+                        }}
+                      />
+
+                      <span>
+                        mm
+                      </span>
+
+                    </div>
+
+                  </label>
+
+                  <p>
+                    Ajuste conforme a altura real dessa área da
+                    peça para manter a escala da arte.
+                  </p>
+
+                </div>
+
+              )}
+
+            </div>
+          )
+        })}
 
 
         {warning && (
@@ -1209,8 +1252,8 @@ export default function ControlsPanel({
 
       <Section
         icon="●"
-        title="Cores da caneca"
-        description="Personalize o acabamento"
+        title="Cores"
+        description="Personalize cada peça"
         defaultOpen={false}
       >
 
@@ -1221,7 +1264,7 @@ export default function ControlsPanel({
           </span>
 
           <small>
-            um clique aplica fundo + caneca
+            um clique aplica fundo + peça principal
           </small>
 
         </div>
@@ -1243,10 +1286,16 @@ export default function ControlsPanel({
                   color: palette.background,
                 }))
 
-                setMugColors({
-                  body: palette.body,
-                  handle: palette.handle,
-                  inside: palette.inside,
+                setPartColors((prev) => {
+                  const next = { ...prev }
+
+                  for (const part of activeModel.colorParts) {
+                    if (part.key === 'body' && palette.body) next[part.key] = palette.body
+                    else if (part.key === 'handle' && palette.handle) next[part.key] = palette.handle
+                    else if (part.key === 'inside' && palette.inside) next[part.key] = palette.inside
+                  }
+
+                  return next
                 })
               }}
             >
@@ -1274,104 +1323,79 @@ export default function ControlsPanel({
 
         <div className="color-list">
 
-          <label className="color-row">
+          {activeModel.colorParts.map((part) => (
 
-            <span>
-              {activeModel.hasHandle || activeModel.hasInside
-                ? 'Corpo externo'
-                : 'Cor principal'}
-            </span>
-
-            <div className="color-input">
-
-              <input
-                type="color"
-                value={mugColors.body}
-                onChange={(e) =>
-                  setMugColors((c) => ({
-                    ...c,
-                    body: e.target.value,
-                  }))
-                }
-              />
+            <label className="color-row" key={part.key}>
 
               <span>
-                {mugColors.body.toUpperCase()}
-              </span>
-
-            </div>
-
-          </label>
-
-
-          {activeModel.hasHandle && (
-
-            <label className="color-row">
-
-              <span>
-                Alça
+                {part.label}
               </span>
 
               <div className="color-input">
 
                 <input
                   type="color"
-                  value={mugColors.handle}
+                  value={partColors[part.key] || part.default}
                   onChange={(e) =>
-                    setMugColors((c) => ({
+                    setPartColors((c) => ({
                       ...c,
-                      handle: e.target.value,
+                      [part.key]: e.target.value,
                     }))
                   }
                 />
 
                 <span>
-                  {mugColors.handle.toUpperCase()}
+                  {(partColors[part.key] || part.default).toUpperCase()}
                 </span>
 
               </div>
 
             </label>
 
-          )}
-
-
-          {activeModel.hasInside && (
-
-            <label className="color-row">
-
-              <span>
-                Parte interna
-              </span>
-
-              <div className="color-input">
-
-                <input
-                  type="color"
-                  value={mugColors.inside}
-                  onChange={(e) =>
-                    setMugColors((c) => ({
-                      ...c,
-                      inside: e.target.value,
-                    }))
-                  }
-                />
-
-                <span>
-                  {mugColors.inside.toUpperCase()}
-                </span>
-
-              </div>
-
-            </label>
-
-          )}
+          ))}
 
         </div>
 
 
+        {activeModel.glassOpacity && (
+
+          <div className="range-field">
+
+            <div className="range-header">
+
+              <span>
+                {activeModel.glassOpacity.label}
+              </span>
+
+              <strong>
+                {Math.round((glassOpacity ?? activeModel.glassOpacity.default) * 100)}%
+              </strong>
+
+            </div>
+
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={glassOpacity ?? activeModel.glassOpacity.default}
+              onChange={(e) =>
+                setGlassOpacity(Number(e.target.value))
+              }
+            />
+
+            <div className="range-limits">
+              <span>Opaco</span>
+              <span>Transparente</span>
+            </div>
+
+          </div>
+
+        )}
+
+
         {/* ==================================================
-            BRILHO DA CANECA
+            BRILHO
         ================================================== */}
 
         <div className="range-field">
@@ -1379,7 +1403,7 @@ export default function ControlsPanel({
           <div className="range-header">
 
             <span>
-              Brilho da caneca
+              Brilho
             </span>
 
             <strong>
@@ -1410,14 +1434,15 @@ export default function ControlsPanel({
 
 
         <p className="control-hint">
-          O brilho afeta apenas o acabamento das canecas.
-          A folha permanece fosca.
+          O brilho afeta o acabamento das peças que aceitam
+          esse ajuste (cerâmica e plástico). A folha e o mouse
+          do mousepad permanecem foscos.
         </p>
 
 
         <p className="control-hint">
-          O corpo também define a cor das áreas onde
-          não existe impressão.
+          O "Corpo" também define a cor das áreas onde não
+          existe impressão.
         </p>
 
       </Section>
@@ -1427,14 +1452,22 @@ export default function ControlsPanel({
         type="button"
         className="reset-all-button"
         onClick={() => {
-          setArt((a) => ({
-            ...a,
-            widthMM: 210,
-            heightMM: 92,
-            offsetXMM: 0,
-            offsetYMM: 0,
-            mugRealHeightMM: 95,
-          }))
+          setArtZones((zones) => {
+            const next = { ...zones }
+
+            for (const zone of activeModel.printZones) {
+              next[zone.key] = {
+                ...next[zone.key],
+                widthMM: 210,
+                heightMM: 92,
+                offsetXMM: 0,
+                offsetYMM: 0,
+                mugRealHeightMM: 95,
+              }
+            }
+
+            return next
+          })
 
           setBackground({
             type: 'color',
@@ -1446,11 +1479,19 @@ export default function ControlsPanel({
             offsetYFrac: 0.5,
           })
 
-          setMugColors({
-            body: '#ffffff',
-            handle: '#ffffff',
-            inside: '#ffffff',
+          setPartColors((prev) => {
+            const next = { ...prev }
+
+            for (const part of activeModel.colorParts) {
+              next[part.key] = part.default
+            }
+
+            return next
           })
+
+          if (activeModel.glassOpacity) {
+            setGlassOpacity(activeModel.glassOpacity.default)
+          }
 
           setMugShine(0.5)
 

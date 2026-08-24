@@ -437,14 +437,28 @@ export default function App() {
   const [isExportingImage, setIsExportingImage] =
     useState(false)
 
-  const [art, setArt] = useState({
-    image: null,
-    fileName: null,
-    widthMM: 210,
-    heightMM: 92,
-    offsetXMM: 0,
-    offsetYMM: 0,
-    mugRealHeightMM: 95,
+  /*
+    Estado por modelo: cada modelo declara suas próprias
+    "printZones" (áreas de arte) e "colorParts" (peças
+    colorí­veis) — ver src/config/models.js. artZones/partColors
+    guardam um valor por CHAVE dessas listas, então a mesma
+    chave (ex: "body", "main") é preservada ao trocar de
+    modelo, e chaves novas ganham valores padrão automaticamente.
+  */
+  const [artZones, setArtZones] = useState(() => {
+    const initial = {}
+    for (const zone of getModel(DEFAULT_MODEL_ID).printZones) {
+      initial[zone.key] = {
+        image: null,
+        fileName: null,
+        widthMM: 210,
+        heightMM: 92,
+        offsetXMM: 0,
+        offsetYMM: 0,
+        mugRealHeightMM: 95,
+      }
+    }
+    return initial
   })
 
 
@@ -465,11 +479,21 @@ export default function App() {
   })
 
 
-  const [mugColors, setMugColors] = useState({
-    body: '#ffffff',
-    handle: '#ffffff',
-    inside: '#ffffff',
+  const [partColors, setPartColors] = useState(() => {
+    const initial = {}
+    for (const part of getModel(DEFAULT_MODEL_ID).colorParts) {
+      initial[part.key] = part.default
+    }
+    return initial
   })
+
+
+  /*
+    Transparência (só usada por modelos de vidro —
+    ver config.glassOpacity em src/config/models.js).
+  */
+  const [glassOpacity, setGlassOpacity] =
+    useState(getModel(DEFAULT_MODEL_ID).glassOpacity?.default ?? 0.15)
 
 
   /*
@@ -484,6 +508,54 @@ export default function App() {
 
   const [modelId, setModelId] =
     useState(DEFAULT_MODEL_ID)
+
+  /*
+    Ao trocar de modelo, garante que toda "printZone" e todo
+    "colorPart" do modelo novo tenham um valor no estado —
+    sem apagar o que já existia (uma chave compartilhada como
+    "body" continua com a cor que o usuário escolheu antes).
+  */
+  useEffect(() => {
+    const config = getModel(modelId)
+
+    setArtZones((zones) => {
+      let changed = false
+      const next = { ...zones }
+
+      for (const zone of config.printZones) {
+        if (!next[zone.key]) {
+          changed = true
+          next[zone.key] = {
+            image: null,
+            fileName: null,
+            widthMM: 210,
+            heightMM: 92,
+            offsetXMM: 0,
+            offsetYMM: 0,
+            mugRealHeightMM: 95,
+          }
+        }
+      }
+
+      return changed ? next : zones
+    })
+
+    setPartColors((colors) => {
+      let changed = false
+      const next = { ...colors }
+
+      for (const part of config.colorParts) {
+        if (next[part.key] === undefined) {
+          changed = true
+          next[part.key] = part.default
+        }
+      }
+
+      return changed ? next : colors
+    })
+
+    setGlassOpacity(config.glassOpacity?.default ?? 0.15)
+  }, [modelId])
 
   const [warning, setWarning] =
     useState(null)
@@ -888,14 +960,17 @@ const [videoEffect, setVideoEffect] =
 
 
         <ControlsPanel
-          art={art}
-          setArt={setArt}
+          artZones={artZones}
+          setArtZones={setArtZones}
 
           background={background}
           setBackground={setBackground}
 
-          mugColors={mugColors}
-          setMugColors={setMugColors}
+          partColors={partColors}
+          setPartColors={setPartColors}
+
+          glassOpacity={glassOpacity}
+          setGlassOpacity={setGlassOpacity}
 
           mugShine={mugShine}
           setMugShine={setMugShine}
@@ -1006,18 +1081,19 @@ const [videoEffect, setVideoEffect] =
       }}
     >
       <MugScene
-        art={{
-          ...art,
-          onWarning: setWarning,
-        }}
+        artZones={artZones}
 
         background={background}
 
-        mugColors={mugColors}
+        partColors={partColors}
+
+        glassOpacity={glassOpacity}
 
         mugShine={mugShine}
 
         modelId={modelId}
+
+        onWarning={setWarning}
 
         registerApi={registerApi}
 
