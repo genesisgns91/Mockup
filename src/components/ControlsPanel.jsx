@@ -5,59 +5,6 @@ import { MODELS, MODEL_GROUPS, getModel } from '../config/models.js'
 
 
 /*
-  ==========================================================
-  PALETAS RÁPIDAS
-
-  Combinações prontas para quem só quer um resultado bonito
-  sem precisar entender de teoria das cores. Um clique
-  aplica cor de fundo + cores da caneca juntas.
-  ==========================================================
-*/
-const QUICK_PALETTES = [
-  {
-    id: 'areia',
-    label: 'Areia',
-    background: '#F3ECE3',
-    body: '#ffffff',
-    handle: '#ffffff',
-    inside: '#ffffff',
-  },
-  {
-    id: 'terracota',
-    label: 'Terracota',
-    background: '#E7C9B4',
-    body: '#ffffff',
-    handle: '#C2532F',
-    inside: '#C2532F',
-  },
-  {
-    id: 'noturno',
-    label: 'Noturno',
-    background: '#1B1230',
-    body: '#151024',
-    handle: '#D6336C',
-    inside: '#151024',
-  },
-  {
-    id: 'menta',
-    label: 'Menta',
-    background: '#DFF3EC',
-    body: '#ffffff',
-    handle: '#0E8FA3',
-    inside: '#ffffff',
-  },
-  {
-    id: 'monocromo',
-    label: 'Monocromo',
-    background: '#ffffff',
-    body: '#ffffff',
-    handle: '#ffffff',
-    inside: '#ffffff',
-  },
-]
-
-
-/*
   Resolução mínima recomendada (px por mm) para a arte sair
   nítida na impressão/exportação. Abaixo disso, avisamos o
   usuário em vez de deixar ele descobrir só no resultado final.
@@ -452,8 +399,8 @@ export default function ControlsPanel({
         (zone) => Boolean(artZones[zone.key]?.fileName)
       ),
     },
-    { id: 'background', label: 'Fundo', done: background.type === 'image' ? Boolean(background.image) : true },
     { id: 'colors', label: 'Cores', done: true },
+    { id: 'background', label: 'Fundo', done: background.type === 'image' ? Boolean(background.image) : true },
   ]
 
   const completedSteps = steps.filter((s) => s.done).length
@@ -574,7 +521,7 @@ export default function ControlsPanel({
 
 
       {/* ==================================================
-          ARTE
+          SUA ARTE
       ================================================== */}
 
       <Section
@@ -963,6 +910,144 @@ export default function ControlsPanel({
 
 
       {/* ==================================================
+          CORES
+      ================================================== */}
+
+      <Section
+        icon="●"
+        title="Cores"
+        description={`${activeModel.colorParts.length} ${activeModel.colorParts.length > 1 ? 'peças personalizáveis' : 'peça personalizável'}`}
+        defaultOpen={false}
+      >
+
+        <div className="color-list">
+
+          {activeModel.colorParts.map((part) => (
+
+            <label className="color-row" key={part.key}>
+
+              <span>
+                {part.label}
+              </span>
+
+              <div className="color-input">
+
+                <input
+                  type="color"
+                  value={partColors[part.key] || part.default}
+                  onChange={(e) =>
+                    setPartColors((c) => ({
+                      ...c,
+                      [part.key]: e.target.value,
+                    }))
+                  }
+                />
+
+                <span>
+                  {(partColors[part.key] || part.default).toUpperCase()}
+                </span>
+
+              </div>
+
+            </label>
+
+          ))}
+
+        </div>
+
+
+        {activeModel.glassOpacity && (
+
+          <div className="range-field">
+
+            <div className="range-header">
+
+              <span>
+                {activeModel.glassOpacity.label}
+              </span>
+
+              <strong>
+                {Math.round((glassOpacity ?? activeModel.glassOpacity.default) * 100)}%
+              </strong>
+
+            </div>
+
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={glassOpacity ?? activeModel.glassOpacity.default}
+              onChange={(e) =>
+                setGlassOpacity(Number(e.target.value))
+              }
+            />
+
+            <div className="range-limits">
+              <span>Opaco</span>
+              <span>Transparente</span>
+            </div>
+
+          </div>
+
+        )}
+
+
+        {/* ==================================================
+            BRILHO
+        ================================================== */}
+
+        <div className="range-field">
+
+          <div className="range-header">
+
+            <span>
+              Brilho
+            </span>
+
+            <strong>
+              {Math.round(mugShine * 100)}%
+            </strong>
+
+          </div>
+
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={mugShine}
+            onChange={(e) =>
+              setMugShine(
+                Number(e.target.value)
+              )
+            }
+          />
+
+          <div className="range-limits">
+            <span>Fosco</span>
+            <span>Brilhante</span>
+          </div>
+
+        </div>
+
+
+        <p className="control-hint">
+          O brilho afeta o acabamento das peças que aceitam
+          esse ajuste (cerâmica e plástico). A folha e o mouse
+          do mousepad permanecem foscos.
+        </p>
+
+
+        <p className="control-hint">
+          O "Corpo" também define a cor das áreas onde não
+          existe impressão.
+        </p>
+
+      </Section>
+
+
+      {/* ==================================================
           FUNDO
       ================================================== */}
 
@@ -1250,202 +1335,6 @@ export default function ControlsPanel({
           CORES
       ================================================== */}
 
-      <Section
-        icon="●"
-        title="Cores"
-        description="Personalize cada peça"
-        defaultOpen={false}
-      >
-
-        <div className="field-label">
-
-          <span>
-            Paletas rápidas
-          </span>
-
-          <small>
-            um clique aplica fundo + peça principal
-          </small>
-
-        </div>
-
-        <div className="palette-row">
-
-          {QUICK_PALETTES.map((palette) => (
-
-            <button
-              key={palette.id}
-              type="button"
-              className="palette-swatch"
-              title={palette.label}
-              aria-label={`Aplicar paleta ${palette.label}`}
-              onClick={() => {
-                setBackground((b) => ({
-                  ...b,
-                  type: 'color',
-                  color: palette.background,
-                }))
-
-                setPartColors((prev) => {
-                  const next = { ...prev }
-
-                  for (const part of activeModel.colorParts) {
-                    if (part.key === 'body' && palette.body) next[part.key] = palette.body
-                    else if (part.key === 'handle' && palette.handle) next[part.key] = palette.handle
-                    else if (part.key === 'inside' && palette.inside) next[part.key] = palette.inside
-                  }
-
-                  return next
-                })
-              }}
-            >
-
-              <span
-                className="palette-swatch-half"
-                style={{ background: palette.background }}
-              />
-
-              <span
-                className="palette-swatch-half"
-                style={{ background: palette.body }}
-              />
-
-              <span className="palette-swatch-label">
-                {palette.label}
-              </span>
-
-            </button>
-
-          ))}
-
-        </div>
-
-
-        <div className="color-list">
-
-          {activeModel.colorParts.map((part) => (
-
-            <label className="color-row" key={part.key}>
-
-              <span>
-                {part.label}
-              </span>
-
-              <div className="color-input">
-
-                <input
-                  type="color"
-                  value={partColors[part.key] || part.default}
-                  onChange={(e) =>
-                    setPartColors((c) => ({
-                      ...c,
-                      [part.key]: e.target.value,
-                    }))
-                  }
-                />
-
-                <span>
-                  {(partColors[part.key] || part.default).toUpperCase()}
-                </span>
-
-              </div>
-
-            </label>
-
-          ))}
-
-        </div>
-
-
-        {activeModel.glassOpacity && (
-
-          <div className="range-field">
-
-            <div className="range-header">
-
-              <span>
-                {activeModel.glassOpacity.label}
-              </span>
-
-              <strong>
-                {Math.round((glassOpacity ?? activeModel.glassOpacity.default) * 100)}%
-              </strong>
-
-            </div>
-
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={glassOpacity ?? activeModel.glassOpacity.default}
-              onChange={(e) =>
-                setGlassOpacity(Number(e.target.value))
-              }
-            />
-
-            <div className="range-limits">
-              <span>Opaco</span>
-              <span>Transparente</span>
-            </div>
-
-          </div>
-
-        )}
-
-
-        {/* ==================================================
-            BRILHO
-        ================================================== */}
-
-        <div className="range-field">
-
-          <div className="range-header">
-
-            <span>
-              Brilho
-            </span>
-
-            <strong>
-              {Math.round(mugShine * 100)}%
-            </strong>
-
-          </div>
-
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={mugShine}
-            onChange={(e) =>
-              setMugShine(
-                Number(e.target.value)
-              )
-            }
-          />
-
-          <div className="range-limits">
-            <span>Fosco</span>
-            <span>Brilhante</span>
-          </div>
-
-        </div>
-
-
-        <p className="control-hint">
-          O brilho afeta o acabamento das peças que aceitam
-          esse ajuste (cerâmica e plástico). A folha e o mouse
-          do mousepad permanecem foscos.
-        </p>
-
-
-        <p className="control-hint">
-          O "Corpo" também define a cor das áreas onde não
-          existe impressão.
-        </p>
-
-      </Section>
 
 
       <button

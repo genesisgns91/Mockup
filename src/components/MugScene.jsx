@@ -7,10 +7,10 @@ import {
 } from '@react-three/fiber'
 import {
   OrbitControls,
-  Environment,
   ContactShadows,
 } from '@react-three/drei'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import * as THREE from 'three'
 import { useDecalTexture } from '../hooks/useDecalTexture.js'
 import {
@@ -18,6 +18,35 @@ import {
   computeCoverCrop,
 } from '../utils/exportLayout.js'
 import { MATERIAL, PRINT_MODE, getModel } from '../config/models.js'
+
+
+/*
+  Ambiente de estúdio (reflexos/iluminação) GERADO LOCALMENTE,
+  sem depender de nenhum arquivo .hdr baixado de CDN externa.
+  Mais rápido e continua funcionando mesmo em redes restritas.
+*/
+function StudioEnvironment() {
+  const { gl, scene } = useThree()
+
+  useEffect(() => {
+    const pmrem = new THREE.PMREMGenerator(gl)
+
+    const envTexture = pmrem.fromScene(
+      new RoomEnvironment(),
+      0.04
+    ).texture
+
+    scene.environment = envTexture
+
+    return () => {
+      scene.environment = null
+      envTexture.dispose()
+      pmrem.dispose()
+    }
+  }, [gl, scene])
+
+  return null
+}
 
 
 /*
@@ -774,15 +803,38 @@ function Mug({
   }, [zoneTextures, config, onWarning])
 
 
+  const magicOverlaysRef = useRef([])
+
   useEffect(() => {
     const printMaterialKind =
       bodyColorPart.material
 
-    const printParams =
-      getPrintMaterialParams(
-        printMaterialKind,
-        mugShine
-      )
+    /*
+      Quando a peça tem controle de transparência (vidro), a arte
+      também deve ficar transparente — não faz sentido a arte ficar
+      opaca "flutuando" sobre um copo transparente. Nesse caso usamos
+      os parâmetros de vidro de verdade (não o substituto opaco) e
+      aplicamos a mesma quantidade de transmissão escolhida no slider.
+    */
+    /*
+      IMPORTANTE: "transmission" (vidro de verdade, com refração) é
+      pesado — exige um passe de render extra por objeto. O corpo já
+      usa 1 objeto transmissivo (abaixo). Se a arte também usasse
+      transmission, seriam 2 objetos transmissivos na mesma peça, o
+      que derruba a taxa de quadros (e pode travar em aparelhos mais
+      fracos). Por isso a arte simula a transparência com opacidade
+      simples — visualmente também fica "ver através", só que leve.
+    */
+    const printParams = config.glassOpacity
+      ? { ...getMaterialParams(printMaterialKind, mugShine), transmission: 0 }
+      : getPrintMaterialParams(printMaterialKind, mugShine)
+
+    const opacityAmount = config.glassOpacity
+      ? Math.max(
+          0,
+          Math.min(1, Number(glassOpacity ?? config.glassOpacity.default))
+        )
+      : null
 
     const zoneMaterials = new Map()
 
@@ -790,15 +842,19 @@ function Mug({
       const entry = zoneTextures[zone.key]
       if (!entry?.texture) continue
 
-      zoneMaterials.set(
-        zone.key,
-        new THREE.MeshPhysicalMaterial({
-          map: entry.texture,
-          color: new THREE.Color(0xffffff),
-          ...printParams,
-          side: THREE.DoubleSide,
-        })
-      )
+      const mat = new THREE.MeshPhysicalMaterial({
+        map: entry.texture,
+        color: new THREE.Color(0xffffff),
+        ...printParams,
+        side: THREE.DoubleSide,
+      })
+
+      if (opacityAmount !== null) {
+        mat.transparent = true
+        mat.opacity = Math.max(0.35, 1 - opacityAmount * 0.85)
+      }
+
+      zoneMaterials.set(zone.key, mat)
     }
 
     /*
@@ -825,6 +881,27 @@ function Mug({
       }
     }
 
+    /*
+      EFEITO "CANECA MÁGICA"
+
+      Em vez de aplicar a arte diretamente na peça, cria uma CÓPIA
+      transparente por cima dela (mesma geometria, mesma posição) e
+      anima a opacidade dessa cópia entre 0 e 1 — a peça original
+      (opaca, na cor "Corpo" escolhida, normalmente preta) some e
+      aparece por baixo, simulando a mudança térmica real do produto.
+    */
+    const magicOverlays = []
+
+    const bodyBlackMaterial = config.magicAnimation
+      ? new THREE.MeshPhysicalMaterial({
+          color: new THREE.Color(
+            partColors[bodyColorPart.key] || bodyColorPart.default
+          ),
+          ...getMaterialParams(bodyColorPart.material, mugShine),
+          side: THREE.DoubleSide,
+        })
+      : null
+
     group.traverse((child) => {
       if (!child.isMesh) return
 
@@ -837,10 +914,32 @@ function Mug({
 
       if (zone) {
         const mat = zoneMaterials.get(zone.key)
-        if (mat) {
+        if (!mat) return
+
+        if (config.magicAnimation) {
+          // peça original: opaca, cor "Corpo" (preta por padrão)
+          child.material = bodyBlackMaterial
+          child.material.needsUpdate = true
+
+          // cópia transparente por cima, com a arte
+          const overlay = new THREE.Mesh(child.geometry, mat.clone())
+          overlay.material.transparent = true
+          overlay.material.depthWrite = false
+          overlay.material.opacity = 0
+          overlay.renderOrder = 1
+          overlay.position.copy(child.position)
+          overlay.rotation.copy(child.rotation)
+          overlay.scale.copy(child.scale)
+          overlay.castShadow = false
+          overlay.receiveShadow = false
+
+          child.parent.add(overlay)
+          magicOverlays.push(overlay)
+        } else {
           child.material = mat
           child.material.needsUpdate = true
         }
+
         return
       }
 
@@ -854,7 +953,18 @@ function Mug({
       }
     })
 
+    magicOverlaysRef.current = magicOverlays
+
     return () => {
+      magicOverlaysRef.current = []
+
+      magicOverlays.forEach((overlay) => {
+        overlay.parent?.remove(overlay)
+        overlay.material.dispose()
+      })
+
+      if (bodyBlackMaterial) bodyBlackMaterial.dispose()
+
       zoneMaterials.forEach((m) => m.dispose())
 
       if (paperPrintMaterial) paperPrintMaterial.dispose()
@@ -867,7 +977,31 @@ function Mug({
     config,
     mugShine,
     bodyColorPart,
+    partColors,
+    glassOpacity,
   ])
+
+
+  /*
+    Avança o crossfade preto ⇄ arte da caneca mágica a cada quadro.
+    Cada caneca (zona) tem uma leve defasagem de fase, para não
+    "piscarem" exatamente juntas.
+  */
+  useFrame(({ clock }) => {
+    if (!config.magicAnimation) return
+
+    const overlays = magicOverlaysRef.current
+    if (!overlays.length) return
+
+    overlays.forEach((overlay, i) => {
+      const t =
+        (Math.sin(
+          clock.elapsedTime * 0.7 - i * 1.4
+        ) + 1) / 2
+
+      overlay.material.opacity = t
+    })
+  })
 
 
   return (
@@ -2045,9 +2179,7 @@ export default function MugScene({
         intensity={0.5}
       />
 
-      <Environment
-        preset="studio"
-      />
+      <StudioEnvironment />
 
       <group
         ref={spinTargetRef}

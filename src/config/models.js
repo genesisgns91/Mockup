@@ -142,7 +142,7 @@ export const MODELS = {
   chopp: {
     id: 'chopp', name: 'Caneca de Chopp', shortName: 'Chopp', group: 'Canecas',
     count: 1, file: 'model-CHOP.obj', hasPaper: false,
-    printZones: [{ key: 'main', label: 'Arte', meshNames: ['print', 'handle_print'], mode: PRINT_MODE.CYLINDRICAL }],
+    printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
       { ...body(), material: MATERIAL.GLASS },
       { key: 'handle', label: 'Alça', meshNames: ['handle'], material: MATERIAL.GLASS, default: '#ffffff' },
@@ -192,10 +192,16 @@ export const MODELS = {
       { key: 'mug2', label: 'Caneca 2', meshNames: ['print.001'], mode: PRINT_MODE.CYLINDRICAL },
     ],
     colorParts: [
-      body(),
-      { key: 'handle', label: 'Alça', meshNames: ['handle'], material: MATERIAL.CERAMIC, default: '#111111' },
-      { key: 'inside', label: 'Parte interna', meshNames: ['inside'], material: MATERIAL.CERAMIC, default: '#111111' },
+      { ...body(), default: '#0a0a0a' },
+      { key: 'handle', label: 'Alça', meshNames: ['handle'], material: MATERIAL.CERAMIC, default: '#0a0a0a' },
+      { key: 'inside', label: 'Parte interna', meshNames: ['inside'], material: MATERIAL.CERAMIC, default: '#0a0a0a' },
     ],
+    /*
+      Efeito "caneca mágica": a arte não fica estática — pulsa,
+      alternando entre a caneca preta e a caneca com a arte revelada,
+      simulando o efeito térmico real do produto.
+    */
+    magicAnimation: true,
   },
   duasCanecasDif: {
     id: 'duasCanecasDif', name: '2 Canecas Diferentes', shortName: '2 Diferentes', group: 'Canecas',
@@ -222,7 +228,10 @@ export const MODELS = {
   torreParXicara: {
     id: 'torreParXicara', name: 'Torre de Xícaras (Par)', shortName: 'Torre (Par)', group: 'Canecas',
     count: 2, file: 'model-torre-par-xicara.obj', hasPaper: false,
-    printZones: [{ key: 'main', label: 'Arte', meshNames: ['body', 'body.001'], mode: PRINT_MODE.CYLINDRICAL }],
+    printZones: [
+      { key: 'cup1', label: 'Xícara 1', meshNames: ['body'], mode: PRINT_MODE.CYLINDRICAL },
+      { key: 'cup2', label: 'Xícara 2', meshNames: ['body.001'], mode: PRINT_MODE.CYLINDRICAL },
+    ],
     colorParts: [
       body(),
       { key: 'handle', label: 'Alça', meshNames: ['handle'], material: MATERIAL.CERAMIC, default: '#ffffff' },
@@ -233,7 +242,10 @@ export const MODELS = {
   torreXicaras: {
     id: 'torreXicaras', name: 'Torre de Xícaras (Conjunto)', shortName: 'Torre', group: 'Canecas',
     count: 4, file: 'model-torre-xicaras.obj', hasPaper: false,
-    printZones: [{ key: 'main', label: 'Arte', meshNames: ['body', 'body.001', 'body.002', 'body.003'], mode: PRINT_MODE.CYLINDRICAL }],
+    printZones: [
+      { key: 'art1', label: 'Arte 1 (xícaras 1 e 3)', meshNames: ['body', 'body.002'], mode: PRINT_MODE.CYLINDRICAL },
+      { key: 'art2', label: 'Arte 2 (xícaras 2 e 4)', meshNames: ['body.001', 'body.003'], mode: PRINT_MODE.CYLINDRICAL },
+    ],
     colorParts: [
       body(),
       { key: 'handle', label: 'Alça', meshNames: ['handle'], material: MATERIAL.CERAMIC, default: '#ffffff' },
@@ -333,15 +345,16 @@ export const MODELS = {
       { key: 'base', label: 'Base de Borracha', meshNames: ['mousepad_base'], material: MATERIAL.FOAM, default: '#2b2b2b' },
     ],
     fixedParts: [
-      { meshNames: ['mouse', 'mouse_wheel'], color: '#141414', material: MATERIAL.PLASTIC },
+      { meshNames: ['mouse'], color: '#141414', material: MATERIAL.PLASTIC },
+      { meshNames: ['mouse_wheel'], color: '#3a3a3a', material: MATERIAL.PLASTIC },
     ],
   },
   agenda: {
     id: 'agenda', name: 'Agenda', shortName: 'Agenda', group: 'Casa',
     count: 1, file: 'model-agenda.obj', hasPaper: false,
     printZones: [
-      { key: 'front', label: 'Capa - Frente', meshNames: ['front'], mode: PRINT_MODE.FLAT },
-      { key: 'back', label: 'Capa - Verso', meshNames: ['back'], mode: PRINT_MODE.FLAT },
+      { key: 'front', label: 'Capa - Frente', meshNames: ['back'], mode: PRINT_MODE.FLAT },
+      { key: 'back', label: 'Capa - Verso', meshNames: ['front'], mode: PRINT_MODE.FLAT },
     ],
     colorParts: [{ ...body(), material: MATERIAL.LEATHER }],
     fixedParts: [
