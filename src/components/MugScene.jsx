@@ -11,6 +11,7 @@ import {
 } from '@react-three/drei'
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import * as THREE from 'three'
 import { useDecalTexture } from '../hooks/useDecalTexture.js'
 import {
@@ -98,6 +99,19 @@ const TARGET_HEIGHT = 1.7
   na barra de progresso da UI.
 */
 export const ROTATE_SECONDS = 6
+
+
+/*
+  Arquivos cujas faces curvas (com mais de 3 lados) ficam com
+  aparência de "estática"/ruído sob luz de ambiente, porque a
+  triangulação simples do carregador desalinha a normal do arquivo
+  com o triângulo real. Ver comentário onde isso é usado.
+*/
+const NEEDS_NORMAL_FIX = new Set([
+  'model-mousepad.obj',
+  'model-mochila-saco.obj',
+  'model-long-drink-transparente.obj',
+])
 
 
 function modelUrl(config) {
@@ -402,6 +416,7 @@ function Mug({
   glassOpacity,
   mugShine,
   modelId,
+  magicPlaying,
   onFrame,
   onWarning,
 }) {
@@ -416,6 +431,32 @@ function Mug({
     () => obj.clone(true),
     [obj]
   )
+
+  /*
+    Alguns .obj de origem têm faces com mais de 3 lados (quads,
+    pentágonos...) em regiões curvas. O carregador as triangula de
+    forma simples (leque a partir do 1º vértice), o que pode deixar
+    a normal gravada no arquivo desalinhada com o triângulo real —
+    isso aparece como um brilho "ruído/estático" nas peças com
+    reflexo de ambiente. Corrigido juntando vértices coincidentes e
+    recalculando normais limpas a partir da geometria de verdade.
+  */
+  useMemo(() => {
+    if (!NEEDS_NORMAL_FIX.has(config.file)) return
+
+    group.traverse((child) => {
+      if (!child.isMesh) return
+
+      try {
+        const merged = mergeVertices(child.geometry, 1e-4)
+        merged.computeVertexNormals()
+        child.geometry.dispose()
+        child.geometry = merged
+      } catch (e) {
+        // geometria mantida como veio, caso a mesclagem falhe
+      }
+    })
+  }, [group, config.file])
 
   // { [zoneKey]: { mode, radiusUnits, widthUnits, heightUnits } }
   const [measurements, setMeasurements] =
@@ -983,9 +1024,10 @@ function Mug({
 
 
   /*
-    Avança o crossfade preto ⇄ arte da caneca mágica a cada quadro.
-    Cada caneca (zona) tem uma leve defasagem de fase, para não
-    "piscarem" exatamente juntas.
+    Avança o crossfade preto ⇄ arte da caneca mágica a cada quadro,
+    só quando o usuário clicou em "reproduzir" (magicPlaying). As
+    duas canecas do kit animam exatamente juntas (mesma fase).
+    Enquanto pausado, fica parado na caneca preta.
   */
   useFrame(({ clock }) => {
     if (!config.magicAnimation) return
@@ -993,12 +1035,17 @@ function Mug({
     const overlays = magicOverlaysRef.current
     if (!overlays.length) return
 
-    overlays.forEach((overlay, i) => {
-      const t =
-        (Math.sin(
-          clock.elapsedTime * 0.7 - i * 1.4
-        ) + 1) / 2
+    if (!magicPlaying) {
+      overlays.forEach((overlay) => {
+        overlay.material.opacity = 0
+      })
+      return
+    }
 
+    const t =
+      (Math.sin(clock.elapsedTime * 0.7) + 1) / 2
+
+    overlays.forEach((overlay) => {
       overlay.material.opacity = t
     })
   })
@@ -2084,6 +2131,7 @@ export default function MugScene({
   glassOpacity,
   mugShine,
   modelId,
+  magicPlaying,
   registerApi,
   spinTargetRef,
   videoSpeed,
@@ -2191,6 +2239,7 @@ export default function MugScene({
           glassOpacity={glassOpacity}
           mugShine={mugShine}
           modelId={modelId}
+          magicPlaying={magicPlaying}
           onFrame={setFrame}
           onWarning={onWarning}
         />

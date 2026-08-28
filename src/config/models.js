@@ -55,7 +55,7 @@ function body(meshNames = [], extra = {}) {
 
 export const MODELS = {
   single: {
-    id: 'single', name: '1 Caneca', shortName: 'Caneca', group: 'Canecas',
+    id: 'single', name: '1 Caneca', shortName: '1 Caneca', group: 'Canecas',
     count: 1, file: 'model.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
@@ -92,7 +92,7 @@ export const MODELS = {
     ],
   },
   trioPaper: {
-    id: 'trioPaper', name: '3 Canecas + Folha', shortName: '3 + Folha', group: 'Canecas',
+    id: 'trioPaper', name: '3 Canecas + Arte', shortName: '3 + Arte', group: 'Canecas',
     count: 3, file: 'model-trio-paper.obj', hasPaper: true,
     printZones: [
       { key: 'mug1', label: 'Caneca 1', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL },
@@ -108,7 +108,7 @@ export const MODELS = {
   },
 
   canecaGlitter: {
-    id: 'canecaGlitter', name: 'Caneca com Glitter', shortName: 'C/ Glitter', group: 'Canecas',
+    id: 'canecaGlitter', name: 'Caneca com Glitter', shortName: 'Com Glitter', group: 'Canecas',
     count: 1, file: 'model-CANECA-COM-GLITER.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte (parte de cima)', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
@@ -120,7 +120,7 @@ export const MODELS = {
     glitterBand: { meshNames: ['strip', 'strip_print'], colorKey: 'glitter' },
   },
   canecaCoracao: {
-    id: 'canecaCoracao', name: 'Caneca Coração', shortName: 'Coração', group: 'Canecas',
+    id: 'canecaCoracao', name: 'Caneca Alça Coração', shortName: 'Alça Coração', group: 'Canecas',
     count: 1, file: 'model-CANECA-CORACAO.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
@@ -130,7 +130,7 @@ export const MODELS = {
     ],
   },
   canecaPequena: {
-    id: 'canecaPequena', name: 'Caneca Pequena', shortName: 'Pequena', group: 'Canecas',
+    id: 'canecaPequena', name: 'Caneca 180ml', shortName: '180ml', group: 'Canecas',
     count: 1, file: 'model-CANECA-PEQUENA.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
@@ -151,7 +151,7 @@ export const MODELS = {
     glassOpacity: { key: 'body', label: 'Transparência do vidro', default: 0.15 },
   },
   canecaCasal: {
-    id: 'canecaCasal', name: 'Caneca Casal', shortName: 'Casal', group: 'Canecas',
+    id: 'canecaCasal', name: 'Caneca Casal Coração', shortName: 'Casal Coração', group: 'Canecas',
     count: 2, file: 'model-caneca-casal.obj', hasPaper: false,
     printZones: [
       { key: 'heart', label: 'Caneca Coração', meshNames: ['heart_mug_print'], mode: PRINT_MODE.CYLINDRICAL },
@@ -164,7 +164,7 @@ export const MODELS = {
     ],
   },
   canecaColher: {
-    id: 'canecaColher', name: 'Caneca com Colher', shortName: 'C/ Colher', group: 'Canecas',
+    id: 'canecaColher', name: 'Caneca com Colher', shortName: 'Com Colher', group: 'Canecas',
     count: 1, file: 'model-caneca-colher.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
@@ -206,6 +206,7 @@ export const MODELS = {
   duasCanecasDif: {
     id: 'duasCanecasDif', name: '2 Canecas Diferentes', shortName: '2 Diferentes', group: 'Canecas',
     count: 2, file: 'model-DOIS-DIF.obj', hasPaper: false,
+    hidden: true,
     printZones: [
       { key: 'mug1', label: 'Caneca 1', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL },
       { key: 'mug2', label: 'Caneca 2', meshNames: ['print.001'], mode: PRINT_MODE.CYLINDRICAL },
@@ -217,7 +218,7 @@ export const MODELS = {
     ],
   },
   copoTermico: {
-    id: 'copoTermico', name: 'Copo Térmico (Trio)', shortName: 'C. Térmico', group: 'Canecas',
+    id: 'copoTermico', name: 'Copo Térmico', shortName: 'Copo Térmico', group: 'Canecas',
     count: 3, file: 'model-COPO-TERMICO.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print', 'print.001', 'print.002'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
@@ -226,7 +227,7 @@ export const MODELS = {
     ],
   },
   torreParXicara: {
-    id: 'torreParXicara', name: 'Torre de Xícaras (Par)', shortName: 'Torre (Par)', group: 'Canecas',
+    id: 'torreParXicara', name: 'Torre Par', shortName: 'Torre Par', group: 'Canecas',
     count: 2, file: 'model-torre-par-xicara.obj', hasPaper: false,
     printZones: [
       { key: 'cup1', label: 'Xícara 1', meshNames: ['body'], mode: PRINT_MODE.CYLINDRICAL },
@@ -240,7 +241,7 @@ export const MODELS = {
     ],
   },
   torreXicaras: {
-    id: 'torreXicaras', name: 'Torre de Xícaras (Conjunto)', shortName: 'Torre', group: 'Canecas',
+    id: 'torreXicaras', name: 'Torre 2 Pares', shortName: 'Torre 2 Pares', group: 'Canecas',
     count: 4, file: 'model-torre-xicaras.obj', hasPaper: false,
     printZones: [
       { key: 'art1', label: 'Arte 1 (xícaras 1 e 3)', meshNames: ['body', 'body.002'], mode: PRINT_MODE.CYLINDRICAL },
@@ -430,7 +431,7 @@ export const MODELS = {
     fixedParts: [{ meshNames: ['thermometer'], color: '#dfe6e9', material: MATERIAL.GLASS }],
   },
   garrafinha: {
-    id: 'garrafinha', name: 'Garrafinha', shortName: 'Garrafinha', group: 'Bebidas',
+    id: 'garrafinha', name: 'Garrafa 3', shortName: 'Garrafa 3', group: 'Bebidas',
     count: 1, file: 'model-garrafinha.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [
@@ -439,14 +440,14 @@ export const MODELS = {
     ],
   },
   longDrinkTransparente: {
-    id: 'longDrinkTransparente', name: 'Long Drink Transparente', shortName: 'L.Drink Transp.', group: 'Bebidas',
+    id: 'longDrinkTransparente', name: 'Long Drink Transparente', shortName: 'Long Drink Transp.', group: 'Bebidas',
     count: 1, file: 'model-long-drink-transparente.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [{ ...body(), material: MATERIAL.GLASS }],
     glassOpacity: { key: 'body', label: 'Transparência do copo', default: 0.15 },
   },
   longDrinkBranco: {
-    id: 'longDrinkBranco', name: 'Long Drink Branco', shortName: 'L.Drink Branco', group: 'Bebidas',
+    id: 'longDrinkBranco', name: 'Long Drink', shortName: 'Long Drink', group: 'Bebidas',
     count: 1, file: 'model-longdrink-branco.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [{ ...body(), material: MATERIAL.PLASTIC }],

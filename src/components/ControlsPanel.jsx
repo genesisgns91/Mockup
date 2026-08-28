@@ -12,6 +12,137 @@ import { MODELS, MODEL_GROUPS, getModel } from '../config/models.js'
 const MIN_PX_PER_MM = 8
 
 
+function thumbUrl(id) {
+  return `${import.meta.env.BASE_URL}thumbnails/${id}.png`
+}
+
+
+/*
+  ==========================================================
+  MODAL DE ESCOLHA DE MODELO
+
+  Tela cheia com todos os modelos em grade, com miniatura real
+  e nome — agrupados por categoria. Substitui o antigo painel
+  que expandia/recolhia dentro do menu lateral.
+  ==========================================================
+*/
+function ModelPickerModal({
+  modelsByGroup,
+  activeModelId,
+  onSelect,
+  onClose,
+}) {
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  return (
+    <div
+      className="model-picker-backdrop"
+      onClick={onClose}
+    >
+
+      <div
+        className="model-picker-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+
+        <div className="model-picker-header">
+
+          <div>
+
+            <h3>
+              Escolha o modelo
+            </h3>
+
+            <p>
+              Selecione o produto que você quer personalizar
+            </p>
+
+          </div>
+
+          <button
+            type="button"
+            className="model-picker-close"
+            onClick={onClose}
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+
+        </div>
+
+
+        <div className="model-picker-body">
+
+          {modelsByGroup.map(({ group, items }) => (
+
+            <div key={group} className="model-picker-group">
+
+              <span className="model-picker-group-title">
+                {group}
+              </span>
+
+              <div className="model-picker-grid">
+
+                {items.map((model) => (
+
+                  <button
+                    key={model.id}
+                    type="button"
+                    className={
+                      activeModelId === model.id
+                        ? 'model-card active'
+                        : 'model-card'
+                    }
+                    onClick={() => onSelect(model.id)}
+                  >
+
+                    <span className="model-card-thumb">
+
+                      <img
+                        src={thumbUrl(model.id)}
+                        alt=""
+                        loading="lazy"
+                      />
+
+                      {activeModelId === model.id && (
+                        <span className="model-card-check">
+                          ✓
+                        </span>
+                      )}
+
+                    </span>
+
+                    <span className="model-card-name">
+                      {model.shortName}
+                    </span>
+
+                  </button>
+
+                ))}
+
+              </div>
+
+            </div>
+
+          ))}
+
+        </div>
+
+      </div>
+
+    </div>
+  )
+}
+
+
 function Section({
   icon,
   title,
@@ -252,6 +383,9 @@ export default function ControlsPanel({
   const [showCalibration, setShowCalibration] =
     useState(false)
 
+  const [pickerOpen, setPickerOpen] =
+    useState(false)
+
   const [artDragActive, setArtDragActive] =
     useState({})
 
@@ -413,7 +547,7 @@ export default function ControlsPanel({
   */
   const modelsByGroup = MODEL_GROUPS.map((group) => ({
     group,
-    items: Object.values(MODELS).filter((m) => m.group === group),
+    items: Object.values(MODELS).filter((m) => m.group === group && !m.hidden),
   })).filter((g) => g.items.length > 0)
 
 
@@ -470,54 +604,52 @@ export default function ControlsPanel({
           MODELO
       ================================================== */}
 
-      <Section
-        icon="▣"
-        title="Modelo"
-        description="Escolha o modelo de caneca"
+      <button
+        type="button"
+        className="model-trigger"
+        onClick={() => setPickerOpen(true)}
       >
 
-        {modelsByGroup.map(({ group, items }) => (
+        <span className="model-trigger-thumb">
+          <img
+            src={thumbUrl(activeModel.id)}
+            alt=""
+            loading="lazy"
+          />
+        </span>
 
-          <div key={group} className="mug-group">
+        <span className="model-trigger-info">
 
-            <span className="mug-group-title">
-              {group}
-            </span>
+          <span className="model-trigger-label">
+            Modelo escolhido
+          </span>
 
-            <div className="mug-selector">
+          <span className="model-trigger-name">
+            {activeModel.name}
+          </span>
 
-              {items.map((model) => (
+        </span>
 
-                <button
-                  key={model.id}
-                  type="button"
-                  className={
-                    modelId === model.id
-                      ? 'mug-option active'
-                      : 'mug-option'
-                  }
-                  onClick={() => setModelId(model.id)}
-                >
+        <span className="model-trigger-cta">
+          Trocar modelo
+        </span>
 
-                  <span className="mug-number">
-                    {model.count}
-                  </span>
+      </button>
 
-                  <span>
-                    {model.shortName}
-                  </span>
 
-                </button>
+      {pickerOpen && (
 
-              ))}
+        <ModelPickerModal
+          modelsByGroup={modelsByGroup}
+          activeModelId={modelId}
+          onSelect={(id) => {
+            setModelId(id)
+            setPickerOpen(false)
+          }}
+          onClose={() => setPickerOpen(false)}
+        />
 
-            </div>
-
-          </div>
-
-        ))}
-
-      </Section>
+      )}
 
 
       {/* ==================================================
