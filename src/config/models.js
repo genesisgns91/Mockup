@@ -148,7 +148,7 @@ export const MODELS = {
       { key: 'handle', label: 'Alça', meshNames: ['handle'], material: MATERIAL.GLASS, default: '#ffffff' },
       { key: 'inside', label: 'Parte interna', meshNames: ['inside'], material: MATERIAL.GLASS, default: '#ffffff' },
     ],
-    glassOpacity: { key: 'body', label: 'Transparência do vidro', default: 0.15 },
+    glassOpacity: { key: 'body', label: 'Transparência do vidro', default: 0.8 },
   },
   canecaCasal: {
     id: 'canecaCasal', name: 'Caneca Casal Coração', shortName: 'Casal Coração', group: 'Canecas',
@@ -444,7 +444,7 @@ export const MODELS = {
     count: 1, file: 'model-long-drink-transparente.obj', hasPaper: false,
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [{ ...body(), material: MATERIAL.GLASS }],
-    glassOpacity: { key: 'body', label: 'Transparência do copo', default: 0.15 },
+    glassOpacity: { key: 'body', label: 'Transparência do copo', default: 0.8 },
   },
   longDrinkBranco: {
     id: 'longDrinkBranco', name: 'Long Drink', shortName: 'Long Drink', group: 'Bebidas',

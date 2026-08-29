@@ -776,6 +776,12 @@ function Mug({
       Aplicada por cima do material já criado para a colorPart
       indicada em config.glassOpacity — não muda a peça impressa
       (a arte continua opaca e legível, ver getPrintMaterialParams).
+
+      Usa opacidade direta (transparent+opacity) em vez de
+      "transmission" físico: o transmission depende de um passe de
+      render extra (capturar o que está atrás do objeto) que nem
+      sempre aparece de forma visível dependendo do fundo da cena —
+      opacidade dá um efeito "vidro" sempre visível e mais leve.
     */
     if (config.glassOpacity) {
       const mat = colorMaterials.get(
@@ -788,9 +794,10 @@ function Mug({
           Math.min(1, Number(glassOpacity ?? config.glassOpacity.default))
         )
 
-        mat.transmission = amount * 0.95
+        mat.transmission = 0
         mat.transparent = true
-        mat.opacity = 1
+        mat.opacity = Math.max(0.08, 1 - amount)
+        mat.depthWrite = amount > 0.4 ? false : true
         mat.needsUpdate = true
       }
     }

@@ -493,7 +493,7 @@ export default function App() {
     ver config.glassOpacity em src/config/models.js).
   */
   const [glassOpacity, setGlassOpacity] =
-    useState(getModel(DEFAULT_MODEL_ID).glassOpacity?.default ?? 0.15)
+    useState(getModel(DEFAULT_MODEL_ID).glassOpacity?.default ?? 0.8)
 
 
   /*
@@ -508,6 +508,9 @@ export default function App() {
 
   const [modelId, setModelId] =
     useState(DEFAULT_MODEL_ID)
+
+  const [magicPlaying, setMagicPlaying] =
+    useState(false)
 
   /*
     Ao trocar de modelo, garante que toda "printZone" e todo
@@ -554,7 +557,10 @@ export default function App() {
       return changed ? next : colors
     })
 
-    setGlassOpacity(config.glassOpacity?.default ?? 0.15)
+    setGlassOpacity(config.glassOpacity?.default ?? 0.8)
+
+    // toda troca de modelo começa pausada — o usuário decide quando ver a animação
+    setMagicPlaying(false)
   }, [modelId])
 
   const [warning, setWarning] =
@@ -1093,6 +1099,8 @@ const [videoEffect, setVideoEffect] =
 
         modelId={modelId}
 
+        magicPlaying={magicPlaying}
+
         onWarning={setWarning}
 
         registerApi={registerApi}
@@ -1132,6 +1140,30 @@ const [videoEffect, setVideoEffect] =
         }}
       />
     </div>
+
+
+    {/* BOTÃO DE PLAY — só aparece em modelos com animação (Caneca Mágica) */}
+    {getModel(modelId).magicAnimation && !magicPlaying && (
+
+      <button
+        type="button"
+        className="magic-play-button"
+        style={{
+          position: 'absolute',
+          zIndex: 6,
+        }}
+        onClick={() => setMagicPlaying(true)}
+      >
+
+        <span className="magic-play-icon">
+          ▶
+        </span>
+
+        Ver efeito térmico
+
+      </button>
+
+    )}
 
 
     {/* AJUDA */}
