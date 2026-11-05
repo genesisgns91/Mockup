@@ -37,4 +37,11 @@ export const EXPORT_FORMATS = [
     width: 1080,
     height: 1920,
   },
+  {
+    id: 'wide',
+    label: 'Paisagem',
+    hint: '1920×1080 · 16:9',
+    width: 1920,
+    height: 1080,
+  },
 ]

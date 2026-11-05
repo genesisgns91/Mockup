@@ -5200,3 +5200,549 @@ html.m-mode body {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* =========================================================
+   QUADRO DE EXPORTAÇÃO (viewport com a proporção escolhida)
+========================================================= */
+
+.viewport-area {
+
+  position: relative;
+
+  width: 100%;
+  height: 100%;
+
+  min-height: 630px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: calc(var(--radius-lg) - 4px);
+
+  overflow: hidden;
+}
+
+.viewport-area .viewport.viewport-frame {
+
+  min-height: 0;
+}
+
+/* quando há formato escolhido, a área vira uma "mesa de trabalho" */
+.viewport-area.has-frame {
+
+  background:
+    repeating-conic-gradient(
+      #E4DDD0 0% 25%,
+      #EEE8DD 0% 50%
+    )
+    50% / 18px 18px;
+}
+
+.viewport-area.has-frame .viewport.viewport-frame {
+
+  border-radius: 6px;
+
+  border: 0;
+
+  box-shadow:
+    0 0 0 1px rgba(27, 18, 48, 0.18),
+    0 18px 40px -12px rgba(27, 18, 48, 0.4);
+}
+
+.viewport-tools {
+
+  position: absolute;
+
+  right: 10px;
+  bottom: 10px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  z-index: 8;
+}
+
+.viewport-tool {
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 38px;
+  height: 38px;
+
+  border: 1px solid rgba(230, 223, 211, 0.9);
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.88);
+
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+
+  color: var(--text);
+
+  box-shadow: var(--shadow-sm);
+
+  transition:
+    transform 0.16s ease,
+    color 0.16s ease,
+    background 0.16s ease;
+}
+
+.viewport-tool:hover {
+
+  color: var(--primary);
+
+  background: #fff;
+}
+
+.viewport-tool:active {
+
+  transform: scale(0.9);
+}
+
+/* edição do fundo direto na cena */
+.bg-edit-overlay {
+
+  position: absolute;
+  inset: 0;
+
+  z-index: 9;
+
+  touch-action: none;
+
+  cursor: grab;
+
+  outline: 2px dashed var(--primary);
+  outline-offset: -3px;
+
+  background: rgba(214, 51, 108, 0.05);
+}
+
+.bg-edit-overlay:active {
+
+  cursor: grabbing;
+}
+
+.bg-edit-hint {
+
+  position: absolute;
+
+  left: 50%;
+  top: 12px;
+
+  transform: translateX(-50%);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  padding: 8px 16px;
+
+  border-radius: 99px;
+
+  background: rgba(27, 18, 48, 0.82);
+
+  color: #fff;
+
+  font-size: 0.78rem;
+  font-weight: 600;
+
+  line-height: 1.25;
+
+  white-space: nowrap;
+
+  pointer-events: none;
+}
+
+.bg-edit-hint small {
+
+  font-size: 0.64rem;
+  font-weight: 400;
+
+  opacity: 0.78;
+}
+
+.bg-edit-done {
+
+  position: absolute;
+
+  left: 50%;
+  bottom: 14px;
+
+  transform: translateX(-50%);
+
+  padding: 12px 24px;
+
+  border: 0;
+  border-radius: 99px;
+
+  background: var(--gradient-ink);
+
+  color: #fff;
+
+  font-weight: 700;
+  font-size: 0.9rem;
+
+  box-shadow: 0 10px 26px -8px rgba(214, 51, 108, 0.6);
+}
+
+.bg-edit-done:active {
+
+  transform: translateX(-50%) scale(0.94);
+}
+
+.shape-wide {
+
+  aspect-ratio: 16 / 9;
+
+  width: 22px;
+}
+
+.segmented-control.four-col {
+
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.bg-actions {
+
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 8px;
+
+  margin-bottom: 14px;
+}
+
+.bg-actions .btn {
+
+  min-height: 44px;
+
+  font-size: 0.8rem;
+}
+
+
+/* =========================================================
+   ENVIO DE ARTE — SLOTS LADO A LADO
+========================================================= */
+
+.art-slots {
+
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+
+  margin-bottom: 12px;
+}
+
+.art-slots.multi {
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.art-slots.multi:has(> :nth-child(3)) {
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.art-slot {
+
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  min-width: 0;
+
+  padding: 10px;
+
+  border: 1.5px dashed #D3C9B8;
+  border-radius: var(--radius);
+
+  background: #FDFBF7;
+
+  cursor: pointer;
+
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    transform 0.16s ease,
+    box-shadow 0.18s ease;
+}
+
+.art-slots.multi .art-slot {
+
+  flex-direction: column;
+  align-items: stretch;
+  text-align: center;
+}
+
+.art-slot:hover {
+
+  border-color: var(--primary);
+
+  background: var(--primary-soft);
+}
+
+.art-slot:active {
+
+  transform: scale(0.97);
+}
+
+.art-slot.loaded {
+
+  border-style: solid;
+  border-color: var(--border);
+
+  background: #fff;
+}
+
+.art-slot.selected {
+
+  border-style: solid;
+  border-color: var(--primary);
+
+  box-shadow: 0 0 0 3px rgba(214, 51, 108, 0.14);
+}
+
+.art-slot.drag-active {
+
+  border-color: var(--secondary-accent);
+
+  background: var(--secondary-soft);
+}
+
+.art-slot-thumb {
+
+  position: relative;
+
+  flex: none;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 56px;
+  height: 56px;
+
+  overflow: hidden;
+
+  border-radius: 10px;
+
+  background:
+    repeating-conic-gradient(
+      #EDE7DC 0% 25%,
+      #F8F5EF 0% 50%
+    )
+    50% / 12px 12px;
+}
+
+.art-slots.multi .art-slot-thumb {
+
+  width: 100%;
+  height: auto;
+
+  aspect-ratio: 1 / 1;
+
+  max-height: 110px;
+}
+
+.art-slot-thumb img {
+
+  width: 100%;
+  height: 100%;
+
+  object-fit: contain;
+}
+
+.art-slot-plus {
+
+  color: var(--primary);
+
+  font-size: 1.8rem;
+  font-weight: 300;
+
+  line-height: 1;
+}
+
+.art-slot-check {
+
+  position: absolute;
+
+  right: 4px;
+  bottom: 4px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  height: 18px;
+
+  border-radius: 50%;
+
+  background: var(--secondary-accent);
+
+  color: #fff;
+
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.art-slot-text {
+
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  line-height: 1.25;
+}
+
+.art-slot-text strong {
+
+  font-size: 0.82rem;
+}
+
+.art-slot-text small {
+
+  overflow: hidden;
+
+  color: var(--text-muted);
+
+  font-size: 0.66rem;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.art-slot-clear {
+
+  position: absolute;
+
+  top: 6px;
+  right: 6px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 26px;
+  height: 26px;
+
+  border: 0;
+  border-radius: 50%;
+
+  background: rgba(27, 18, 48, 0.62);
+
+  color: #fff;
+
+  font-size: 0.68rem;
+
+  z-index: 2;
+}
+
+.art-slot-clear:hover {
+
+  background: var(--danger);
+}
+
+.link-art-toggle {
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  margin-bottom: 14px;
+  padding: 10px 12px;
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+
+  background: #fff;
+
+  cursor: pointer;
+}
+
+.link-art-text {
+
+  display: flex;
+  flex-direction: column;
+
+  line-height: 1.25;
+}
+
+.link-art-text strong {
+
+  font-size: 0.8rem;
+}
+
+.link-art-text small {
+
+  color: var(--text-muted);
+
+  font-size: 0.66rem;
+}
+
+.zone-settings-label {
+
+  margin-bottom: 4px;
+}
+
+.m-sheet .art-slot {
+
+  min-height: 64px;
+}
+
+.m-sheet .art-slot-clear {
+
+  width: 32px;
+  height: 32px;
+}
+
+/* celular: o novo contêiner de viewport ocupa todo o palco */
+.m-stage .viewport-area.m-viewport-area {
+
+  position: absolute;
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  min-height: 0;
+
+  border-radius: 0;
+}
+
+.m-stage .viewport-area.has-frame .viewport.viewport-frame {
+
+  border-radius: 4px;
+}
+
+.m-stage .viewport-tools {
+
+  right: 10px;
+  bottom: 12px;
+}
+
+
+/* sem formato escolhido (modo livre) no desktop: mantém a altura mínima de sempre */
+.viewport-area:not(.has-frame) .viewport.viewport-frame {
+
+  min-height: 630px;
+}
+
+.viewport-area.has-frame {
+
+  min-height: max(630px, 72vh);
+}
+
+.m-stage .viewport-area.m-viewport-area:not(.has-frame) .viewport.viewport-frame,
+.m-stage .viewport-area.m-viewport-area.has-frame {
+
+  min-height: 0;
+}

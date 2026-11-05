@@ -1071,16 +1071,21 @@ function Mug({
 }
 
 
-function CameraRig({ frame }) {
+function CameraRig({ frame, reframeKey, resetToken }) {
   const {
     camera,
     size,
     controls,
+    get,
   } = useThree()
 
+  const pendingReframe = useRef(false)
 
-  useEffect(() => {
+
+  const applyFraming = () => {
     if (!frame) return
+
+    const { width: sizeW, height: sizeH } = get().size
 
     const fovRad =
       (
@@ -1089,7 +1094,7 @@ function CameraRig({ frame }) {
       ) / 180
 
     const aspect =
-      size.width / size.height
+      sizeW / sizeH
 
     const distForHeight =
       frame.height /
@@ -1180,7 +1185,44 @@ function CameraRig({ frame }) {
       continuam sendo lidos normalmente aqui dentro,
       só não fazem o efeito rodar de novo sozinhos.
     */
-  }, [frame]) // eslint-disable-line react-hooks/exhaustive-deps
+  }
+
+  /*
+    Enquadramento automático: roda quando o modelo muda, quando
+    o usuário pede "recentralizar" (resetToken) e quando o
+    formato do quadro muda (reframeKey) — nesse último caso
+    espera o canvas ganhar o novo tamanho antes de calcular.
+  */
+  useEffect(() => {
+    applyFraming()
+  }, [frame, resetToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const firstKey = useRef(true)
+
+  useEffect(() => {
+    if (firstKey.current) {
+      firstKey.current = false
+      return undefined
+    }
+
+    pendingReframe.current = true
+
+    const fallback = setTimeout(() => {
+      if (pendingReframe.current) {
+        pendingReframe.current = false
+        applyFraming()
+      }
+    }, 450)
+
+    return () => clearTimeout(fallback)
+  }, [reframeKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (pendingReframe.current) {
+      pendingReframe.current = false
+      applyFraming()
+    }
+  }, [size.width, size.height]) // eslint-disable-line react-hooks/exhaustive-deps
 
 
   return null
@@ -1520,6 +1562,11 @@ function CaptureRig({
               backgroundOptions.offsetXFrac,
               backgroundOptions.offsetYFrac
             )
+
+          if (backgroundOptions.color) {
+            bctx.fillStyle = backgroundOptions.color
+            bctx.fillRect(0, 0, bctx.canvas.width, bctx.canvas.height)
+          }
 
           bctx.drawImage(
             backgroundOptions.image,
@@ -2059,7 +2106,12 @@ const recorder =
                         backgroundOptions.offsetYFrac
                       )
           
-                    bctx.drawImage(
+                    if (backgroundOptions.color) {
+            bctx.fillStyle = backgroundOptions.color
+            bctx.fillRect(0, 0, bctx.canvas.width, bctx.canvas.height)
+          }
+
+          bctx.drawImage(
                       backgroundOptions.image,
                       layout.x,
                       layout.y,
@@ -2145,6 +2197,8 @@ export default function MugScene({
   videoEffect,
   videoQuality,
   onWarning,
+  reframeKey,
+  resetToken,
 }) {
   const [frame, setFrame] =
     useState(null)
@@ -2282,6 +2336,8 @@ export default function MugScene({
 
       <CameraRig
         frame={frame}
+        reframeKey={reframeKey}
+        resetToken={resetToken}
       />
 
 <CaptureRig

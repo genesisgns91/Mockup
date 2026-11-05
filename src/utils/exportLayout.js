@@ -22,14 +22,26 @@ export function clamp01(value) {
 /*
   Calcula tamanho e posição de uma imagem dentro de uma
   caixa (boxWidth x boxHeight), respeitando o modo de
-  encaixe, o zoom extra e a posição de arraste
-  (offsetXFrac / offsetYFrac, de 0 a 1).
+  encaixe, o zoom e a posição (offsetXFrac / offsetYFrac,
+  de 0 a 1; 0.5 = centralizada).
 
   fit:
-    'cover'  -> preenche a caixa inteira, cortando o excesso
-    'width'  -> a largura da imagem preenche a caixa
-    'height' -> a altura da imagem preenche a caixa
+    'cover'   -> preenche a caixa inteira, cortando o excesso
+    'contain' -> a imagem inteira aparece dentro da caixa
+    'width'   -> a largura da imagem preenche a caixa
+    'height'  -> a altura da imagem preenche a caixa
+
+  zoom vai de ZOOM_MIN a ZOOM_MAX (1 = tamanho do encaixe).
+  Abaixo de 1 a imagem fica menor que a caixa e a cor de
+  fundo aparece ao redor.
 */
+export const ZOOM_MIN = 0.25
+export const ZOOM_MAX = 5
+
+export function clampZoom(value) {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Number(value) || 1))
+}
+
 export function getImageLayout(
   naturalWidth,
   naturalHeight,
@@ -54,29 +66,27 @@ export function getImageLayout(
     }
   }
 
-  const coverScale = Math.max(
-    boxWidth / naturalWidth,
-    boxHeight / naturalHeight
-  )
-
   const widthScale = boxWidth / naturalWidth
   const heightScale = boxHeight / naturalHeight
 
-  let baseScale = coverScale
+  let baseScale = Math.max(widthScale, heightScale)
 
+  if (fit === 'contain') baseScale = Math.min(widthScale, heightScale)
   if (fit === 'width') baseScale = widthScale
   if (fit === 'height') baseScale = heightScale
 
-  const scale = baseScale * Math.max(1, zoom || 1)
+  const scale = baseScale * clampZoom(zoom)
 
   const drawW = naturalWidth * scale
   const drawH = naturalHeight * scale
 
-  const overflowX = Math.max(0, drawW - boxWidth)
-  const overflowY = Math.max(0, drawH - boxHeight)
-
-  const x = -overflowX * clamp01(offsetXFrac)
-  const y = -overflowY * clamp01(offsetYFrac)
+  /*
+    (caixa - imagem) * fração funciona nos dois casos:
+    imagem maior que a caixa (valor negativo = corte) e
+    imagem menor (valor positivo = margem).
+  */
+  const x = (boxWidth - drawW) * clamp01(offsetXFrac)
+  const y = (boxHeight - drawH) * clamp01(offsetYFrac)
 
   return { drawW, drawH, x, y }
 }

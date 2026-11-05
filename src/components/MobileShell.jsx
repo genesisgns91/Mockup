@@ -185,6 +185,13 @@ export default function MobileShell({
 
   const activeModel = getModel(modelId)
 
+  const bgEditMode = viewportProps.bgEditMode
+
+  // ao ajustar o fundo na cena, o painel sai da frente
+  useEffect(() => {
+    if (bgEditMode) setTab(null)
+  }, [bgEditMode])
+
   const hasArt = activeModel.printZones.some(
     (zone) => Boolean(artZones[zone.key]?.fileName)
   )
@@ -395,7 +402,7 @@ export default function MobileShell({
       >
         <MemoViewport
           {...viewportProps}
-          className="viewport m-viewport"
+          className="viewport-area m-viewport-area"
           showHelp={false}
         />
       </div>

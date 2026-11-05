@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { clamp01, getImageLayout } from '../utils/exportLayout.js'
+import { clamp01, getImageLayout, ZOOM_MIN, ZOOM_MAX } from '../utils/exportLayout.js'
 import { useToast } from './Toast.jsx'
 import { getModel } from '../config/models.js'
 import { ModelPickerModal, getModelsByGroup, thumbUrl } from './ModelPicker.jsx'
@@ -100,7 +100,7 @@ function Section({
   usados também na exportação).
   ==========================================================
 */
-function BackgroundPositionPreview({ background, setBackground }) {
+function BackgroundPositionPreview({ background, setBackground, aspect = 16 / 10 }) {
   const containerRef = useRef(null)
 
   const [box, setBox] = useState({ width: 0, height: 0 })
@@ -145,9 +145,10 @@ function BackgroundPositionPreview({ background, setBackground }) {
     background.offsetYFrac
   )
 
-  const overflowX = Math.max(0, layout.drawW - box.width)
-  const overflowY = Math.max(0, layout.drawH - box.height)
-  const canDrag = overflowX > 1 || overflowY > 1
+  // "curso" de movimento: negativo quando a imagem é maior que a caixa
+  const travelX = box.width - layout.drawW
+  const travelY = box.height - layout.drawH
+  const canDrag = Math.abs(travelX) > 1 || Math.abs(travelY) > 1
 
 
   const handlePointerDown = (e) => {
@@ -171,17 +172,17 @@ function BackgroundPositionPreview({ background, setBackground }) {
     const deltaX = e.clientX - dragRef.current.startX
     const deltaY = e.clientY - dragRef.current.startY
 
-    const nextX = overflowX
+    const nextX = Math.abs(travelX) > 1
       ? clamp01(
-          dragRef.current.startOffsetX - deltaX / overflowX
+          dragRef.current.startOffsetX + deltaX / travelX
         )
-      : 0.5
+      : dragRef.current.startOffsetX
 
-    const nextY = overflowY
+    const nextY = Math.abs(travelY) > 1
       ? clamp01(
-          dragRef.current.startOffsetY - deltaY / overflowY
+          dragRef.current.startOffsetY + deltaY / travelY
         )
-      : 0.5
+      : dragRef.current.startOffsetY
 
     setBackground((b) => ({
       ...b,
@@ -209,6 +210,10 @@ function BackgroundPositionPreview({ background, setBackground }) {
     <div
       className="bg-position-preview"
       ref={containerRef}
+      style={{
+        aspectRatio: aspect,
+        background: background.color,
+      }}
     >
 
       <img
@@ -249,6 +254,111 @@ function BackgroundPositionPreview({ background, setBackground }) {
 }
 
 
+/*
+  ==========================================================
+  SLOTS DE ARTE
+
+  Um botão de envio por área de impressão, lado a lado e
+  logo no topo da seção: dá para enviar a Imagem 1 e a
+  Imagem 2 em sequência, sem rolar a tela entre elas. Cada
+  slot mostra a miniatura da arte enviada.
+  ==========================================================
+*/
+function ArtSlots({
+  zones,
+  artZones,
+  activeKey,
+  onSelect,
+  onFile,
+  onClear,
+  dragActive,
+  makeDropHandlers,
+}) {
+  const multi = zones.length > 1
+
+  return (
+    <div className={`art-slots${multi ? ' multi' : ''}`}>
+
+      {zones.map((zone, index) => {
+        const art = artZones[zone.key]
+        const loaded = Boolean(art?.fileName)
+        const selected = multi && zone.key === activeKey
+
+        return (
+          <label
+            key={zone.key}
+            className={
+              'art-slot'
+              + (loaded ? ' loaded' : '')
+              + (selected ? ' selected' : '')
+              + (dragActive[zone.key] ? ' drag-active' : '')
+            }
+            {...makeDropHandlers(zone.key)}
+            onClick={() => onSelect(zone.key)}
+          >
+
+            <input
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(e) => {
+                onFile(zone.key, e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+
+            <span className="art-slot-thumb">
+
+              {loaded && art.image?.src ? (
+                <img src={art.image.src} alt="" draggable={false} />
+              ) : (
+                <span className="art-slot-plus">+</span>
+              )}
+
+              {loaded && <span className="art-slot-check">✓</span>}
+
+            </span>
+
+            <span className="art-slot-text">
+
+              <strong>
+                {multi ? zone.label : (loaded ? 'Arte carregada' : 'Enviar sua arte')}
+              </strong>
+
+              <small>
+                {loaded
+                  ? art.fileName
+                  : multi
+                    ? `Toque para enviar (${index + 1}/${zones.length})`
+                    : 'PNG, JPG ou WEBP'}
+              </small>
+
+            </span>
+
+            {loaded && (
+              <button
+                type="button"
+                className="art-slot-clear"
+                aria-label={`Remover ${zone.label}`}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onClear(zone.key)
+                }}
+              >
+                ✕
+              </button>
+            )}
+
+          </label>
+        )
+      })}
+
+    </div>
+  )
+}
+
+
 export default function ControlsPanel({
   artZones,
   setArtZones,
@@ -266,6 +376,13 @@ export default function ControlsPanel({
   modelId,
   setModelId,
   warning,
+
+  linkArt = false,
+  setLinkArt = () => {},
+  activeZoneKey = null,
+  setActiveZoneKey = () => {},
+  frameAspect = null,
+  onEditBackground = () => {},
 
   mobileTab = null,
 }) {
@@ -299,6 +416,8 @@ export default function ControlsPanel({
     const img = new Image()
 
     img.onload = () => {
+      setActiveZoneKey(zoneKey)
+
       setArtZones((zones) => {
         const zone = zones[zoneKey] || {}
 
@@ -320,18 +439,108 @@ export default function ControlsPanel({
           )
         }
 
-        return {
-          ...zones,
-          [zoneKey]: {
-            ...zone,
+        /*
+          "Mesma imagem em todas as áreas": replica a arte
+          em cada área do modelo atual (as medidas de cada
+          área continuam independentes).
+        */
+        const targets = linkArt
+          ? getModel(modelId).printZones.map((z) => z.key)
+          : [zoneKey]
+
+        const next = { ...zones }
+
+        for (const key of targets) {
+          next[key] = {
+            ...(zones[key] || zone),
             image: img,
             fileName: file.name,
-          },
+          }
         }
+
+        return next
       })
     }
 
     img.src = url
+  }
+
+
+  const clearArt = (zoneKey) => {
+    const targets = linkArt
+      ? activeModel.printZones.map((z) => z.key)
+      : [zoneKey]
+
+    setArtZones((zones) => {
+      const next = { ...zones }
+
+      for (const key of targets) {
+        if (next[key]) {
+          next[key] = { ...next[key], image: null, fileName: null }
+        }
+      }
+
+      return next
+    })
+  }
+
+
+  /*
+    Ao ligar "mesma imagem em todas", copia a arte que já
+    existe (da área selecionada, ou da primeira que tiver)
+    para as demais.
+  */
+  const toggleLinkArt = (checked) => {
+    setLinkArt(checked)
+
+    if (!checked) return
+
+    setArtZones((zones) => {
+      const keys = activeModel.printZones.map((z) => z.key)
+      const sourceKey =
+        (zones[currentZoneKey]?.fileName && currentZoneKey) ||
+        keys.find((k) => zones[k]?.fileName)
+
+      if (!sourceKey) return zones
+
+      const source = zones[sourceKey]
+      const next = { ...zones }
+
+      for (const key of keys) {
+        next[key] = {
+          ...(zones[key] || {}),
+          image: source.image,
+          fileName: source.fileName,
+        }
+      }
+
+      return next
+    })
+  }
+
+
+  const copyMeasuresToAll = () => {
+    const source = artZones[currentZoneKey]
+    if (!source) return
+
+    setArtZones((zones) => {
+      const next = { ...zones }
+
+      for (const z of activeModel.printZones) {
+        next[z.key] = {
+          ...(zones[z.key] || {}),
+          widthMM: source.widthMM,
+          heightMM: source.heightMM,
+          offsetXMM: source.offsetXMM,
+          offsetYMM: source.offsetYMM,
+          mugRealHeightMM: source.mugRealHeightMM,
+        }
+      }
+
+      return next
+    })
+
+    toast.success('Medidas copiadas para todas as áreas.')
   }
 
 
@@ -407,6 +616,15 @@ export default function ControlsPanel({
 
 
   const activeModel = getModel(modelId)
+
+  const currentZoneKey =
+    activeModel.printZones.some((z) => z.key === activeZoneKey)
+      ? activeZoneKey
+      : activeModel.printZones[0].key
+
+  const visibleZones = activeModel.printZones.filter(
+    (z) => z.key === currentZoneKey
+  )
 
 
   /*
@@ -556,7 +774,45 @@ export default function ControlsPanel({
         }
       >
 
-        {activeModel.printZones.map((zone, zoneIndex) => {
+        <ArtSlots
+          zones={activeModel.printZones}
+          artZones={artZones}
+          activeKey={currentZoneKey}
+          onSelect={setActiveZoneKey}
+          onFile={processArtFile}
+          onClear={clearArt}
+          dragActive={artDragActive}
+          makeDropHandlers={makeZoneDropHandlers}
+        />
+
+        {activeModel.printZones.length > 1 && (
+
+          <label className="link-art-toggle">
+
+            <span className="link-art-text">
+              <strong>Usar a mesma imagem em todas</strong>
+              <small>Replica a arte em todas as áreas da peça</small>
+            </span>
+
+            <span className="switch">
+
+              <input
+                type="checkbox"
+                checked={linkArt}
+                onChange={(e) => toggleLinkArt(e.target.checked)}
+              />
+
+              <span className="switch-track">
+                <span className="switch-thumb" />
+              </span>
+
+            </span>
+
+          </label>
+
+        )}
+
+        {visibleZones.map((zone, zoneIndex) => {
           const zoneArt = artZones[zone.key] || {
             image: null,
             fileName: null,
@@ -589,72 +845,10 @@ export default function ControlsPanel({
             >
 
               {activeModel.printZones.length > 1 && (
-                <div className="field-label">
-                  <span>{zone.label}</span>
+                <div className="field-label zone-settings-label">
+                  <span>Ajustes · {zone.label}</span>
                 </div>
               )}
-
-              <label
-                className={`upload-area${artDragActive[zone.key] ? ' drag-active' : ''}`}
-                {...makeZoneDropHandlers(zone.key)}
-              >
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleArtUpload(zone.key, e)}
-                  hidden
-                />
-
-                {zoneArt.fileName ? (
-
-                  <div className="uploaded-art">
-
-                    <div className="upload-check">
-                      ✓
-                    </div>
-
-                    <div className="upload-info">
-
-                      <strong>
-                        Arte carregada
-                      </strong>
-
-                      <span>
-                        {zoneArt.fileName}
-                      </span>
-
-                    </div>
-
-                    <span className="upload-change">
-                      Trocar
-                    </span>
-
-                  </div>
-
-                ) : (
-
-                  <div className="upload-empty">
-
-                    <span className="upload-icon">
-                      ↑
-                    </span>
-
-                    <strong>
-                      {activeModel.printZones.length > 1
-                        ? `Enviar arte — ${zone.label}`
-                        : 'Enviar sua arte'}
-                    </strong>
-
-                    <span>
-                      Arraste aqui ou clique · PNG, JPG ou WEBP
-                    </span>
-
-                  </div>
-
-                )}
-
-              </label>
 
 
               <div className="field-group">
@@ -837,6 +1031,16 @@ export default function ControlsPanel({
 
               </div>
 
+
+              {activeModel.printZones.length > 1 && (
+                <button
+                  type="button"
+                  className="advanced-toggle"
+                  onClick={copyMeasuresToAll}
+                >
+                  <span>⧉ Copiar estas medidas para todas as áreas</span>
+                </button>
+              )}
 
               {/* CALIBRAÇÃO */}
 
@@ -1223,7 +1427,64 @@ export default function ControlsPanel({
                 <BackgroundPositionPreview
                   background={background}
                   setBackground={setBackground}
+                  aspect={frameAspect || 16 / 10}
                 />
+
+                <div className="bg-actions">
+
+                  <button
+                    type="button"
+                    className="btn btn-primary bg-action-main"
+                    onClick={onEditBackground}
+                  >
+                    ✥ Ajustar direto na cena
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() =>
+                      setBackground((b) => ({
+                        ...b,
+                        fit: 'cover',
+                        zoom: 1,
+                        offsetXFrac: 0.5,
+                        offsetYFrac: 0.5,
+                      }))
+                    }
+                  >
+                    ⟲ Centralizar
+                  </button>
+
+                </div>
+
+
+                <label className="color-picker">
+
+                  <span>
+                    Cor atrás da imagem
+                  </span>
+
+                  <div className="color-picker-control">
+
+                    <input
+                      type="color"
+                      value={background.color}
+                      onChange={(e) =>
+                        setBackground((b) => ({
+                          ...b,
+                          color: e.target.value,
+                        }))
+                      }
+                    />
+
+                    <span>
+                      {background.color.toUpperCase()}
+                    </span>
+
+                  </div>
+
+                </label>
 
 
                 <div className="field-group">
@@ -1241,7 +1502,7 @@ export default function ControlsPanel({
                   </div>
 
 
-                  <div className="segmented-control three-col">
+                  <div className="segmented-control four-col">
 
                     <button
                       type="button"
@@ -1258,6 +1519,23 @@ export default function ControlsPanel({
                       }
                     >
                       Cobrir
+                    </button>
+
+                    <button
+                      type="button"
+                      className={
+                        background.fit === 'contain'
+                          ? 'active'
+                          : ''
+                      }
+                      onClick={() =>
+                        setBackground((b) => ({
+                          ...b,
+                          fit: 'contain',
+                        }))
+                      }
+                    >
+                      Conter
                     </button>
 
                     <button
@@ -1317,8 +1595,8 @@ export default function ControlsPanel({
 
                   <input
                     type="range"
-                    min="1"
-                    max="3"
+                    min={ZOOM_MIN}
+                    max={ZOOM_MAX}
                     step="0.01"
                     value={background.zoom || 1}
                     onChange={(e) =>
@@ -1330,20 +1608,21 @@ export default function ControlsPanel({
                   />
 
                   <div className="range-limits">
+                    <span>{Math.round(ZOOM_MIN * 100)}%</span>
                     <span>100%</span>
-                    <span>300%</span>
+                    <span>{Math.round(ZOOM_MAX * 100)}%</span>
                   </div>
 
                 </div>
 
 
                 <p className="control-hint">
-                  Escolha "Cobrir" para preencher todo o
-                  fundo (recortando o excesso), ou
-                  "Largura"/"Altura" para ajustar por um
-                  dos lados. Depois, aumente o zoom e
-                  arraste a prévia acima para escolher a
-                  área visível.
+                  "Cobrir" preenche todo o quadro (recortando o
+                  excesso); "Conter" mostra a imagem inteira.
+                  Com zoom abaixo de 100% a imagem fica menor
+                  e a cor de fundo aparece ao redor. A prévia
+                  acima tem a mesma proporção do quadro de
+                  exportação escolhido.
                 </p>
 
               </>

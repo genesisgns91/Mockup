@@ -335,6 +335,26 @@ const [videoEffect, setVideoEffect] =
   const [previewModal, setPreviewModal] =
     useState(null)
 
+  /*
+    Arte: "mesma imagem em todas as áreas" (opcional) e qual
+    área está sendo ajustada. Ficam aqui no App para
+    sobreviver à troca de abas no celular.
+  */
+  const [linkArt, setLinkArt] =
+    useState(false)
+
+  const [activeZoneKey, setActiveZoneKey] =
+    useState(null)
+
+  /*
+    Edição do fundo direto na cena e "recentralizar modelo".
+  */
+  const [bgEditMode, setBgEditMode] =
+    useState(false)
+
+  const [resetToken, setResetToken] =
+    useState(0)
+
 
   const activeFormat =
     EXPORT_FORMATS.find(
@@ -433,6 +453,7 @@ const [videoEffect, setVideoEffect] =
     }
 
     return {
+      color: background.color,
       image: bgImageElRef.current,
       naturalWidth: bgImageElRef.current.naturalWidth,
       naturalHeight: bgImageElRef.current.naturalHeight,
@@ -643,6 +664,23 @@ const [videoEffect, setVideoEffect] =
   }
 
 
+  useEffect(() => {
+    if (background.type !== 'image' || !background.image) {
+      setBgEditMode(false)
+    }
+  }, [background.type, background.image])
+
+  const handleBgEditStart = useCallback(() => setBgEditMode(true), [])
+  const handleBgEditDone = useCallback(() => setBgEditMode(false), [])
+
+  const handleResetView = useCallback(() => {
+    setResetToken((n) => n + 1)
+  }, [])
+
+  const frameAspect = activeFormat.width
+    ? activeFormat.width / activeFormat.height
+    : null
+
   const handleCropOffsetChange = useCallback((x, y) => {
     setCropOffsetXFrac(x)
     setCropOffsetYFrac(y)
@@ -671,6 +709,7 @@ const [videoEffect, setVideoEffect] =
     viewportRef,
     artZones,
     background,
+    setBackground,
     partColors,
     glassOpacity,
     mugShine,
@@ -687,6 +726,11 @@ const [videoEffect, setVideoEffect] =
     cropOffsetXFrac,
     cropOffsetYFrac,
     onCropOffsetChange: handleCropOffsetChange,
+    bgEditMode,
+    onBgEditStart: handleBgEditStart,
+    onBgEditDone: handleBgEditDone,
+    resetToken,
+    onResetView: handleResetView,
   }
 
   const controlsProps = {
@@ -703,6 +747,13 @@ const [videoEffect, setVideoEffect] =
     modelId,
     setModelId,
     warning,
+
+    linkArt,
+    setLinkArt,
+    activeZoneKey,
+    setActiveZoneKey,
+    frameAspect,
+    onEditBackground: handleBgEditStart,
   }
 
 

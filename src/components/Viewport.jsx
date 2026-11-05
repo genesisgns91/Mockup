@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import MugScene from './MugScene.jsx'
-import { clamp01, getImageLayout } from '../utils/exportLayout.js'
+import { clamp01, clampZoom, getImageLayout } from '../utils/exportLayout.js'
 import { getModel } from '../config/models.js'
 
 
@@ -241,21 +241,198 @@ function CropGuideOverlay({
 
 /*
   ==========================================================
+  EDIÇÃO DO FUNDO DIRETO NA CENA
+
+  Camada transparente por cima do 3D: um dedo (ou o mouse)
+  arrasta a imagem de fundo; pinça (ou scroll) muda o zoom.
+  Enquanto está ativa, o gesto NÃO gira o modelo.
+  ==========================================================
+*/
+function BackgroundEditOverlay({
+  background,
+  setBackground,
+  containerRef,
+  onDone,
+}) {
+  const overlayRef = useRef(null)
+  const pointers = useRef(new Map())
+  const gesture = useRef(null)
+  const [natural, setNatural] = useState({ width: 0, height: 0 })
+
+  useEffect(() => {
+    if (!background.image) return undefined
+
+    let cancelled = false
+    const img = new Image()
+
+    img.onload = () => {
+      if (!cancelled) {
+        setNatural({ width: img.naturalWidth, height: img.naturalHeight })
+      }
+    }
+
+    img.src = background.image
+
+    return () => {
+      cancelled = true
+    }
+  }, [background.image])
+
+  const boxSize = () => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    return { w: rect?.width || 1, h: rect?.height || 1 }
+  }
+
+  const beginGesture = () => {
+    const pts = [...pointers.current.values()]
+    if (!pts.length) {
+      gesture.current = null
+      return
+    }
+
+    const dist = pts.length > 1
+      ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+      : 0
+
+    gesture.current = {
+      cx: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+      cy: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+      dist,
+      zoom: background.zoom || 1,
+      ox: background.offsetXFrac ?? 0.5,
+      oy: background.offsetYFrac ?? 0.5,
+    }
+  }
+
+  const apply = () => {
+    const g = gesture.current
+    const pts = [...pointers.current.values()]
+    if (!g || !pts.length) return
+
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
+
+    let zoom = g.zoom
+
+    if (pts.length > 1 && g.dist > 0) {
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+      zoom = clampZoom(g.zoom * (dist / g.dist))
+    }
+
+    const { w, h } = boxSize()
+
+    const layout = getImageLayout(
+      natural.width, natural.height, w, h,
+      background.fit, zoom, 0.5, 0.5
+    )
+
+    // (caixa − imagem) é o "curso" de movimento em cada eixo
+    const travelX = w - layout.drawW
+    const travelY = h - layout.drawH
+
+    const nextX = Math.abs(travelX) > 1
+      ? clamp01(g.ox + (cx - g.cx) / travelX)
+      : g.ox
+
+    const nextY = Math.abs(travelY) > 1
+      ? clamp01(g.oy + (cy - g.cy) / travelY)
+      : g.oy
+
+    setBackground((b) => ({
+      ...b,
+      zoom,
+      offsetXFrac: nextX,
+      offsetYFrac: nextY,
+    }))
+  }
+
+  const onDown = (e) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    beginGesture()
+  }
+
+  const onMove = (e) => {
+    if (!pointers.current.has(e.pointerId)) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    apply()
+  }
+
+  const onUp = (e) => {
+    pointers.current.delete(e.pointerId)
+    beginGesture()
+  }
+
+  // scroll do mouse = zoom (precisa de listener não-passivo)
+  useEffect(() => {
+    const el = overlayRef.current
+    if (!el) return undefined
+
+    const onWheel = (e) => {
+      e.preventDefault()
+
+      setBackground((b) => ({
+        ...b,
+        zoom: clampZoom((b.zoom || 1) * Math.exp(-e.deltaY * 0.0015)),
+      }))
+    }
+
+    el.addEventListener('wheel', onWheel, { passive: false })
+
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [setBackground])
+
+  return (
+    <div
+      ref={overlayRef}
+      className="bg-edit-overlay"
+      onPointerDown={onDown}
+      onPointerMove={onMove}
+      onPointerUp={onUp}
+      onPointerCancel={onUp}
+    >
+      <div className="bg-edit-hint">
+        Arraste para mover o fundo
+        <small>Pinça ou scroll para o zoom</small>
+      </div>
+
+      <button
+        type="button"
+        className="bg-edit-done"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={onDone}
+      >
+        ✓ Concluir
+      </button>
+    </div>
+  )
+}
+
+
+/*
+  ==========================================================
   VIEWPORT 3D
 
   Conjunto completo da cena (fundo, caneca 3D, guia de corte,
   botão de efeito e ajuda). Usado tanto no layout de desktop
-  quanto no de celular — só muda o texto de ajuda e a classe.
+  quanto no de celular.
+
+  QUADRO DE EXPORTAÇÃO: quando um formato (quadrado, retrato,
+  story…) está escolhido, o próprio quadro da cena passa a ter
+  essa proporção e fica centralizado na área disponível. Fundo,
+  modelo 3D e arquivo exportado coincidem exatamente — o que
+  aparece no quadro é o que sai no PNG/vídeo.
   ==========================================================
 */
 export default function Viewport({
   viewportRef,
-  className = 'viewport',
+  className = 'viewport-area',
   helpText = null,
   showHelp = true,
 
   artZones,
   background,
+  setBackground,
   partColors,
   glassOpacity,
   mugShine,
@@ -273,140 +450,264 @@ export default function Viewport({
   cropOffsetXFrac,
   cropOffsetYFrac,
   onCropOffsetChange,
+
+  bgEditMode = false,
+  onBgEditStart,
+  onBgEditDone,
+  resetToken = 0,
+  onResetView,
 }) {
+  const areaRef = useRef(null)
+  const [frameSize, setFrameSize] = useState(null)
+
+  const aspect = activeFormat?.width
+    ? activeFormat.width / activeFormat.height
+    : null
+
+  useEffect(() => {
+    const el = areaRef.current
+
+    if (!el || !aspect) {
+      setFrameSize(null)
+      return undefined
+    }
+
+    const compute = () => {
+      const rect = el.getBoundingClientRect()
+      const pad = 14
+      const availW = Math.max(40, rect.width - pad * 2)
+      const availH = Math.max(40, rect.height - pad * 2)
+
+      let w = availW
+      let h = w / aspect
+
+      if (h > availH) {
+        h = availH
+        w = h * aspect
+      }
+
+      setFrameSize({ w: Math.floor(w), h: Math.floor(h) })
+    }
+
+    compute()
+
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+
+    return () => ro.disconnect()
+  }, [aspect])
+
+  const framed = Boolean(aspect && frameSize)
+  const hasBgImage = background.type === 'image' && background.image
+
   return (
     <div
-      className={className}
-      ref={viewportRef}
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        isolation: 'isolate',
-      }}
+      className={`${className}${framed ? ' has-frame' : ''}`}
+      ref={areaRef}
     >
 
-      {/* FUNDO SÓLIDO DO VIEWPORT */}
       <div
+        className="viewport viewport-frame"
+        ref={viewportRef}
         style={{
-          position: 'absolute',
-          inset: 0,
-          background:
-            background.type === 'color'
-              ? background.color
-              : 'transparent',
-          zIndex: 0,
-          pointerEvents: 'none',
-        }}
-      />
-
-
-      {/* FUNDO DE IMAGEM */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 1,
-          pointerEvents: 'none',
+          position: 'relative',
+          overflow: 'hidden',
+          isolation: 'isolate',
+          width: framed ? `${frameSize.w}px` : '100%',
+          height: framed ? `${frameSize.h}px` : '100%',
+          flex: 'none',
         }}
       >
-        <BackgroundImageLayer
-          background={background}
-          containerRef={viewportRef}
-        />
-      </div>
 
-
-      {/* CANECA 3D */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 2,
-        }}
-      >
-        <MugScene
-          artZones={artZones}
-          background={background}
-          partColors={partColors}
-          glassOpacity={glassOpacity}
-          mugShine={mugShine}
-          modelId={modelId}
-          magicPlaying={magicPlaying}
-          onWarning={setWarning}
-          registerApi={registerApi}
-          spinTargetRef={spinTargetRef}
-          videoSpeed={videoSpeed}
-          videoEffect={videoEffect}
-          videoQuality={videoQuality}
-        />
-      </div>
-
-
-      {/* GUIA DE CORTE */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 4,
-          pointerEvents: 'none',
-        }}
-      >
-        <CropGuideOverlay
-          containerRef={viewportRef}
-          format={activeFormat.width ? activeFormat : null}
-          offsetXFrac={cropOffsetXFrac}
-          offsetYFrac={cropOffsetYFrac}
-          onOffsetChange={onCropOffsetChange}
-        />
-      </div>
-
-
-      {/* BOTÃO DE PLAY — só aparece em modelos com animação (Caneca Mágica) */}
-      {getModel(modelId).magicAnimation && !magicPlaying && (
-        <button
-          type="button"
-          className="magic-play-button"
-          style={{
-            position: 'absolute',
-            zIndex: 6,
-          }}
-          onClick={() => setMagicPlaying(true)}
-        >
-          <span className="magic-play-icon">
-            ▶
-          </span>
-
-          Ver efeito térmico
-        </button>
-      )}
-
-
-      {/* AJUDA */}
-      {showHelp && (
+        {/* FUNDO SÓLIDO (também aparece atrás de imagens menores que o quadro) */}
         <div
-          className="viewport-help"
           style={{
             position: 'absolute',
-            zIndex: 5,
+            inset: 0,
+            background: background.color,
+            zIndex: 0,
+            pointerEvents: 'none',
+          }}
+        />
+
+
+        {/* FUNDO DE IMAGEM */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 1,
+            pointerEvents: 'none',
           }}
         >
-          {helpText || (
-            <>
-              <span className="help-icon">
-                ↔
-              </span>
-
-              Arraste para girar
-
-              <span className="help-divider">
-                •
-              </span>
-
-              Scroll para aproximar
-            </>
-          )}
+          <BackgroundImageLayer
+            background={background}
+            containerRef={viewportRef}
+          />
         </div>
-      )}
+
+
+        {/* CANECA 3D */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 2,
+          }}
+        >
+          <MugScene
+            artZones={artZones}
+            background={background}
+            partColors={partColors}
+            glassOpacity={glassOpacity}
+            mugShine={mugShine}
+            modelId={modelId}
+            magicPlaying={magicPlaying}
+            onWarning={setWarning}
+            registerApi={registerApi}
+            spinTargetRef={spinTargetRef}
+            videoSpeed={videoSpeed}
+            videoEffect={videoEffect}
+            videoQuality={videoQuality}
+            reframeKey={activeFormat?.id || 'free'}
+            resetToken={resetToken}
+          />
+        </div>
+
+
+        {/* GUIA DE CORTE (só útil se o quadro não tiver a proporção exata) */}
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 4,
+            pointerEvents: 'none',
+          }}
+        >
+          <CropGuideOverlay
+            containerRef={viewportRef}
+            format={activeFormat?.width ? activeFormat : null}
+            offsetXFrac={cropOffsetXFrac}
+            offsetYFrac={cropOffsetYFrac}
+            onOffsetChange={onCropOffsetChange}
+          />
+        </div>
+
+
+        {/* BOTÃO DE PLAY — só aparece em modelos com animação (Caneca Mágica) */}
+        {getModel(modelId).magicAnimation && !magicPlaying && (
+          <button
+            type="button"
+            className="magic-play-button"
+            style={{
+              position: 'absolute',
+              zIndex: 6,
+            }}
+            onClick={() => setMagicPlaying(true)}
+          >
+            <span className="magic-play-icon">
+              ▶
+            </span>
+
+            Ver efeito térmico
+          </button>
+        )}
+
+
+        {/* FERRAMENTAS RÁPIDAS DO QUADRO */}
+        {!bgEditMode && (
+          <div className="viewport-tools">
+            <button
+              type="button"
+              className="viewport-tool"
+              onClick={onResetView}
+              aria-label="Recentralizar o modelo no quadro"
+              title="Recentralizar o modelo"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="3.2" />
+                <path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" />
+              </svg>
+            </button>
+
+            {hasBgImage && (
+              <button
+                type="button"
+                className="viewport-tool"
+                onClick={onBgEditStart}
+                aria-label="Ajustar o fundo na cena"
+                title="Ajustar o fundo"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3.5" y="4.5" width="17" height="15" rx="3" />
+                  <circle cx="9" cy="10" r="1.6" />
+                  <path d="m4 17 5-4.5 3.5 3L16 12l4 4.5" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+
+
+        {/* AJUSTE DO FUNDO DIRETO NA CENA */}
+        {bgEditMode && hasBgImage && (
+          <BackgroundEditOverlay
+            background={background}
+            setBackground={setBackground}
+            containerRef={viewportRef}
+            onDone={onBgEditDone}
+          />
+        )}
+
+
+        {/* AJUDA */}
+        {showHelp && !bgEditMode && (
+          <div
+            className="viewport-help"
+            style={{
+              position: 'absolute',
+              zIndex: 5,
+            }}
+          >
+            {helpText || (
+              <>
+                <span className="help-icon">
+                  ↔
+                </span>
+
+                Arraste para girar
+
+                <span className="help-divider">
+                  •
+                </span>
+
+                Scroll para aproximar
+              </>
+            )}
+          </div>
+        )}
+
+      </div>
 
     </div>
   )
