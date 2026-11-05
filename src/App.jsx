@@ -4,6 +4,12 @@ import ControlsPanel from './components/ControlsPanel.jsx'
 import Viewport from './components/Viewport.jsx'
 import ExportPanel from './components/ExportPanel.jsx'
 import MobileShell from './components/MobileShell.jsx'
+import BrandLink from './components/BrandMark.jsx'
+import {
+  FormatSwitch,
+  ViewSizeSwitch,
+  QuickActions,
+} from './components/StageControls.jsx'
 import { useToast } from './components/Toast.jsx'
 import { useIsMobile } from './hooks/useIsMobile.js'
 import { EXPORT_FORMATS } from './config/exportFormats.js'
@@ -351,6 +357,58 @@ const [videoEffect, setVideoEffect] =
   */
   const [bgEditMode, setBgEditMode] =
     useState(false)
+
+  /*
+    Tamanho da visualização no desktop (estilo YouTube):
+      wide     — retangular, painel à esquerda (padrão)
+      square   — quadrada, com a exportação ao lado
+      expanded — cena em tela cheia com controles flutuantes
+    A escolha fica salva neste navegador.
+  */
+  const [viewMode, setViewMode] =
+    useState(() => {
+      try {
+        const saved = localStorage.getItem('almatie-mockup:view-mode')
+        return ['wide', 'square', 'expanded'].includes(saved) ? saved : 'wide'
+      } catch {
+        return 'wide'
+      }
+    })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('almatie-mockup:view-mode', viewMode)
+    } catch {
+      // armazenamento indisponível: segue sem salvar
+    }
+  }, [viewMode])
+
+  // atalhos: 1 · 2 · 3 trocam o tamanho; Esc sai do modo expandido / fecha exportação
+  useEffect(() => {
+    if (isMobile) return undefined
+
+    const onKey = (e) => {
+      const tag = e.target?.tagName
+      const typing =
+        tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' ||
+        e.target?.isContentEditable
+
+      if (e.key === 'Escape') {
+        if (viewMode === 'expanded') setViewMode('wide')
+        return
+      }
+
+      if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+
+      if (e.key === '1') setViewMode('wide')
+      if (e.key === '2') setViewMode('square')
+      if (e.key === '3') setViewMode('expanded')
+    }
+
+    window.addEventListener('keydown', onKey)
+
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isMobile, viewMode])
 
   const [resetToken, setResetToken] =
     useState(0)
@@ -788,8 +846,32 @@ const [videoEffect, setVideoEffect] =
   }
 
 
+  if (viewMode === 'expanded') {
+    return (
+      <>
+        <MobileShell
+          desktop
+          viewMode={viewMode}
+          onViewMode={setViewMode}
+          controlsProps={controlsProps}
+          viewportProps={viewportProps}
+          exportProps={exportProps}
+          almatieUrl={ALMATIE_URL}
+          isBusy={isRecording || isExportingImage}
+        />
+
+        <ExportPreviewModal
+          data={previewModal}
+          onClose={handleClosePreview}
+          onConfirm={handleConfirmDownload}
+        />
+      </>
+    )
+  }
+
+
   return (
-    <div className="app">
+    <div className="app" data-view={viewMode}>
 
       {/* CABEÇALHO */}
 
@@ -797,9 +879,7 @@ const [videoEffect, setVideoEffect] =
 
         <div className="brand-container">
 
-          <div className="brand-symbol">
-            A
-          </div>
+          <BrandLink href={ALMATIE_URL} />
 
           <div className="brand">
 
@@ -818,29 +898,10 @@ const [videoEffect, setVideoEffect] =
 
         <div className="header-right">
 
-          <a
-            className="almatie-link"
-            href={ALMATIE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Ir para o site Almatiê"
-            aria-label="Ir para o site Almatiê (abre em nova aba)"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="14"
-              height="14"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M7 17 17 7" />
-              <path d="M8 7h9v9" />
-            </svg>
-          </a>
+          <ViewSizeSwitch
+            value={viewMode}
+            onChange={setViewMode}
+          />
 
           <span className="editor-status">
 
@@ -862,66 +923,69 @@ const [videoEffect, setVideoEffect] =
         <ControlsPanel {...controlsProps} />
 
 
-        <main
-          className="stage"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: '100%',
-            minWidth: 0,
-          }}
-        >
+        <main className="stage" data-view={viewMode}>
 
           <div className="stage-header">
 
-            <div>
+            <div className="stage-title-group">
 
-              <span className="section-kicker">
-                CRIADOR DE MOCKUP
-              </span>
+              <div>
 
-              <h2>
-                Visualização 3D
-              </h2>
+                <span className="section-kicker">
+                  CRIADOR DE MOCKUP
+                </span>
+
+                <h2>
+                  Visualização 3D
+                </h2>
+
+              </div>
+
+              <div className="scene-badge" key={modelId}>
+                {getModel(modelId).name}
+              </div>
 
             </div>
 
-            <div className="scene-badge">
-              {getModel(modelId).name}
+
+            <div className="stage-tools">
+
+              <FormatSwitch
+                value={exportFormatId}
+                onChange={setExportFormatId}
+              />
+
+              <span className="stage-tools-sep" aria-hidden="true" />
+
+              <QuickActions {...exportProps} />
+
             </div>
 
           </div>
 
 
-          <div
-            className="viewport-card"
-            style={{
-              position: 'relative',
-              zIndex: 1,
-              width: '100%',
-              flexShrink: 0,
-              marginBottom: '24px',
-            }}
-          >
-            <Viewport {...viewportProps} />
+          <div className="stage-body">
+
+            <div className="viewport-card">
+              <Viewport {...viewportProps} />
+            </div>
+
+            {viewMode === 'square' && (
+              <aside className="export-side">
+                <div className="export-card">
+                  <ExportPanel {...exportProps} />
+                </div>
+              </aside>
+            )}
+
           </div>
 
 
-          {/* EXPORTAÇÃO */}
-
-          <div
-            className="export-card"
-            style={{
-              position: 'relative',
-              zIndex: 10,
-              width: '100%',
-              flexShrink: 0,
-              marginTop: '0',
-              clear: 'both',
-            }}
-          >
-            <ExportPanel {...exportProps} />
-          </div>
+          {viewMode === 'wide' && (
+            <div className="export-card">
+              <ExportPanel {...exportProps} />
+            </div>
+          )}
 
         </main>
 

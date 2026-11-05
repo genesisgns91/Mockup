@@ -60,6 +60,8 @@ export default function ExportPanel({
                 FORMATO DE EXPORTAÇÃO
             ================================================== */}
 
+            <div className="export-groups">
+
             <div className="format-selector">
 
               <div className="format-selector-heading">
@@ -288,6 +290,8 @@ export default function ExportPanel({
     </select>
   </div>
 </div>
+
+            </div>
 
             <div className="export-actions">
 

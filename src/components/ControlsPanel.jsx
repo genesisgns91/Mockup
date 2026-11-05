@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { clamp01, getImageLayout, ZOOM_MIN, ZOOM_MAX } from '../utils/exportLayout.js'
 import { useToast } from './Toast.jsx'
 import { getModel } from '../config/models.js'
+import { Icon } from './Icons.jsx'
 import { ModelPickerModal, getModelsByGroup, thumbUrl } from './ModelPicker.jsx'
 
 
@@ -18,13 +19,55 @@ const MIN_PX_PER_MM = 8
   aba ativa é mostrada, sem o cabeçalho de acordeão. No desktop
   continua sendo o acordeão de sempre.
 */
-function TabSection({ mobileTab, id, children, ...rest }) {
+function TabSection({
+  mobileTab,
+  tabbed = false,
+  id,
+  step,
+  totalSteps,
+  children,
+  ...rest
+}) {
   if (mobileTab) {
-    return mobileTab === id ? (
-      <div className="m-tab-content">
-        {children}
+    if (mobileTab !== id) return null
+
+    if (!tabbed) {
+      return (
+        <div className="m-tab-content" key={id}>
+          {children}
+        </div>
+      )
+    }
+
+    return (
+      <div className="tab-pane" key={id}>
+
+        <header className="tab-pane-head">
+
+          <span className="tab-pane-icon" aria-hidden="true">
+            <Icon name={rest.iconName} size={22} />
+          </span>
+
+          <div className="tab-pane-text">
+
+            <span className="tab-pane-step">
+              PASSO {step} DE {totalSteps}
+            </span>
+
+            <h3>{rest.title}</h3>
+
+            <p>{rest.description}</p>
+
+          </div>
+
+        </header>
+
+        <div className="tab-pane-body">
+          {children}
+        </div>
+
       </div>
-    ) : null
+    )
   }
 
   return <Section {...rest}>{children}</Section>
@@ -35,6 +78,7 @@ function Section({
   icon,
   title,
   description,
+  badge = null,
   children,
   defaultOpen = true,
 }) {
@@ -72,8 +116,25 @@ function Section({
 
         </div>
 
+        {badge && (
+          <span className={`section-badge${badge.done ? ' done' : ''}`}>
+            {badge.text}
+          </span>
+        )}
+
         <span className="section-arrow" aria-hidden="true">
-          {open ? '−' : '+'}
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m7 10 5 5 5-5" />
+          </svg>
         </span>
 
       </button>
@@ -617,6 +678,14 @@ export default function ControlsPanel({
 
   const activeModel = getModel(modelId)
 
+  /*
+    Desktop: o painel é dividido em 4 abas (uma por etapa).
+    No celular, quem escolhe a aba é o MobileShell (mobileTab).
+  */
+  const [activeTab, setActiveTab] = useState('model')
+  const tabbed = !mobileTab
+  const currentTab = mobileTab || activeTab
+
   const currentZoneKey =
     activeModel.printZones.some((z) => z.key === activeZoneKey)
       ? activeZoneKey
@@ -633,22 +702,93 @@ export default function ControlsPanel({
     falta — reduz a sensação de "por onde eu começo?".
   */
   const steps = [
-    { id: 'model', label: 'Modelo', done: Boolean(modelId) },
+    { id: 'model', label: 'Modelo', icon: 'cube', done: Boolean(modelId) },
     {
       id: 'art',
       label: 'Arte',
+      icon: 'image',
       done: activeModel.printZones.some(
         (zone) => Boolean(artZones[zone.key]?.fileName)
       ),
     },
-    { id: 'colors', label: 'Cores', done: true },
-    { id: 'background', label: 'Fundo', done: background.type === 'image' ? Boolean(background.image) : true },
+    { id: 'colors', label: 'Cores', icon: 'palette', done: true },
+    { id: 'background', label: 'Fundo', icon: 'layers', done: background.type === 'image' ? Boolean(background.image) : true },
   ]
 
   const completedSteps = steps.filter((s) => s.done).length
 
 
   const modelsByGroup = getModelsByGroup()
+
+  const modelCount = modelsByGroup.reduce((n, g) => n + g.items.length, 0)
+
+  const sameGroupModels =
+    modelsByGroup.find((g) => g.group === activeModel.group)?.items || []
+
+  const resetAll = () => {
+          setArtZones((zones) => {
+            const next = { ...zones }
+
+            for (const zone of activeModel.printZones) {
+              next[zone.key] = {
+                ...next[zone.key],
+                widthMM: 210,
+                heightMM: 92,
+                offsetXMM: 0,
+                offsetYMM: 0,
+                mugRealHeightMM: 95,
+              }
+            }
+
+            return next
+          })
+
+          setBackground({
+            type: 'color',
+            color: '#F3ECE3',
+            image: null,
+            fit: 'cover',
+            zoom: 1,
+            offsetXFrac: 0.5,
+            offsetYFrac: 0.5,
+          })
+
+          setPartColors((prev) => {
+            const next = { ...prev }
+
+            for (const part of activeModel.colorParts) {
+              next[part.key] = part.default
+            }
+
+            return next
+          })
+
+          if (activeModel.glassOpacity) {
+            setGlassOpacity(activeModel.glassOpacity.default)
+          }
+
+          setMugShine(0.5)
+
+          toast.info('Configurações restauradas ao padrão.')
+  }
+
+  const stepIndex = steps.findIndex((s) => s.id === currentTab)
+
+  const goStep = (index) => {
+    const target = steps[index]
+    if (target) setActiveTab(target.id)
+  }
+
+  const goExport = () => {
+    const el = document.querySelector('.export-card')
+
+    if (!el) return
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    el.classList.remove('flash')
+    void el.offsetWidth
+    el.classList.add('flash')
+  }
 
 
   return (
@@ -658,45 +798,83 @@ export default function ControlsPanel({
           CABEÇALHO DO PAINEL
       ================================================== */}
 
-      {!mobileTab && (
-      <div className="panel-heading">
+      {tabbed && (
+      <div className="panel-heading panel-heading-tabbed">
 
-        <span className="section-kicker">
-          PERSONALIZAÇÃO
-        </span>
+        <div className="panel-title-row">
 
-        <h2>
-          Seu mockup
-        </h2>
+          <div>
 
-        <p>
-          Configure a caneca e visualize o resultado em 3D.
-        </p>
+            <span className="section-kicker">
+              PERSONALIZAÇÃO
+            </span>
+
+            <h2>
+              Seu mockup
+            </h2>
+
+          </div>
+
+          <button
+            type="button"
+            className="panel-icon-btn"
+            onClick={resetAll}
+            data-tip="Restaurar valores padrão"
+            data-tip-pos="end"
+            aria-label="Restaurar valores padrão"
+          >
+            <Icon name="reset" size={18} />
+          </button>
+
+        </div>
 
 
-        <div className="progress-track" role="list" aria-label="Etapas de configuração">
+        <nav
+          className="panel-tabs"
+          role="tablist"
+          aria-label="Etapas de personalização"
+          style={{ '--n': steps.length, '--i': Math.max(stepIndex, 0) }}
+        >
+
+          <span className="panel-tab-thumb" aria-hidden="true" />
 
           {steps.map((step, index) => (
 
-            <div
+            <button
               key={step.id}
-              role="listitem"
-              className={`progress-step${step.done ? ' done' : ''}`}
+              type="button"
+              role="tab"
+              aria-selected={step.id === currentTab}
+              className={`panel-tab${step.id === currentTab ? ' active' : ''}`}
+              onClick={() => setActiveTab(step.id)}
             >
 
-              <span className="progress-dot">
-                {step.done ? '✓' : index + 1}
+              <span className="panel-tab-icon">
+
+                <Icon name={step.icon} size={20} />
+
+                {step.id === 'art' && !step.done && (
+                  <span className="panel-tab-dot" />
+                )}
+
+                {step.id === 'art' && step.done && (
+                  <span className="panel-tab-check">
+                    <Icon name="check" size={9} />
+                  </span>
+                )}
+
               </span>
 
-              <span className="progress-label">
+              <span className="panel-tab-label">
+                <em>{index + 1}</em>
                 {step.label}
               </span>
 
-            </div>
+            </button>
 
           ))}
 
-        </div>
+        </nav>
 
       </div>
       )}
@@ -706,56 +884,120 @@ export default function ControlsPanel({
           MODELO
       ================================================== */}
 
-      {!mobileTab && (
-      <>
-      <button
-        type="button"
-        className="model-trigger"
-        onClick={() => setPickerOpen(true)}
+      <TabSection
+        mobileTab={currentTab}
+        tabbed={tabbed}
+        id="model"
+        step={1}
+        totalSteps={4}
+        iconName="cube"
+        icon="◆"
+        title="Modelo"
+        description="Escolha a peça que aparece em 3D ao lado."
       >
 
-        <span className="model-trigger-thumb">
-          <img
-            src={thumbUrl(activeModel.id)}
-            alt=""
-            loading="lazy"
+        <div className="model-hero">
+
+          <span className="model-hero-thumb" key={activeModel.id}>
+            <img
+              src={thumbUrl(activeModel.id)}
+              alt=""
+            />
+          </span>
+
+          <div className="model-hero-info">
+
+            <span className="model-hero-group">
+              {activeModel.group}
+            </span>
+
+            <strong>
+              {activeModel.name}
+            </strong>
+
+            <div className="model-hero-chips">
+
+              <span>
+                {activeModel.printZones.length}
+                {activeModel.printZones.length > 1 ? ' áreas de arte' : ' área de arte'}
+              </span>
+
+              <span>
+                {activeModel.colorParts.length}
+                {activeModel.colorParts.length > 1 ? ' partes com cor' : ' parte com cor'}
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+
+        <button
+          type="button"
+          className="btn btn-primary model-change-btn"
+          onClick={() => setPickerOpen(true)}
+        >
+          Ver todos os modelos
+        </button>
+
+        {sameGroupModels.length > 1 && (
+          <div className="model-quick">
+
+            <span className="model-quick-title">
+              Mais em {activeModel.group}
+            </span>
+
+            <div className="model-quick-grid">
+
+              {sameGroupModels.map((item) => (
+
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`model-quick-item${item.id === modelId ? ' active' : ''}`}
+                  onClick={() => setModelId(item.id)}
+                  title={item.name}
+                >
+
+                  <img
+                    src={thumbUrl(item.id)}
+                    alt=""
+                    loading="lazy"
+                  />
+
+                  <span>
+                    {item.shortName || item.name}
+                  </span>
+
+                </button>
+
+              ))}
+
+            </div>
+
+          </div>
+        )}
+
+        <p className="control-hint">
+          {modelCount} modelos em {modelsByGroup.length} categorias disponíveis.
+        </p>
+
+        {pickerOpen && (
+
+          <ModelPickerModal
+            modelsByGroup={modelsByGroup}
+            activeModelId={modelId}
+            onSelect={(id) => {
+              setModelId(id)
+              setPickerOpen(false)
+            }}
+            onClose={() => setPickerOpen(false)}
           />
-        </span>
 
-        <span className="model-trigger-info">
+        )}
 
-          <span className="model-trigger-label">
-            Modelo escolhido
-          </span>
-
-          <span className="model-trigger-name">
-            {activeModel.name}
-          </span>
-
-        </span>
-
-        <span className="model-trigger-cta">
-          Trocar modelo
-        </span>
-
-      </button>
-
-
-      {pickerOpen && (
-
-        <ModelPickerModal
-          modelsByGroup={modelsByGroup}
-          activeModelId={modelId}
-          onSelect={(id) => {
-            setModelId(id)
-            setPickerOpen(false)
-          }}
-          onClose={() => setPickerOpen(false)}
-        />
-
-      )}
-      </>
-      )}
+      </TabSection>
 
 
       {/* ==================================================
@@ -763,14 +1005,22 @@ export default function ControlsPanel({
       ================================================== */}
 
       <TabSection
-        mobileTab={mobileTab}
+        mobileTab={currentTab}
+        tabbed={tabbed}
         id="art"
+        step={2}
+        totalSteps={4}
+        iconName="image"
         icon="✦"
         title="Sua arte"
+        badge={{
+          text: `${activeModel.printZones.filter((z) => artZones[z.key]?.fileName).length}/${activeModel.printZones.length}`,
+          done: activeModel.printZones.every((z) => artZones[z.key]?.fileName),
+        }}
         description={
           activeModel.printZones.length > 1
-            ? `${activeModel.printZones.length} áreas de impressão nesta peça`
-            : 'Imagem e posicionamento'
+            ? 'Esta peça tem mais de uma área: envie uma imagem para cada uma.'
+            : 'Envie a imagem que será estampada e ajuste tamanho e posição.'
         }
       >
 
@@ -1140,11 +1390,15 @@ export default function ControlsPanel({
       ================================================== */}
 
       <TabSection
-        mobileTab={mobileTab}
+        mobileTab={currentTab}
+        tabbed={tabbed}
         id="colors"
+        step={3}
+        totalSteps={4}
+        iconName="palette"
         icon="●"
         title="Cores"
-        description={`${activeModel.colorParts.length} ${activeModel.colorParts.length > 1 ? 'peças personalizáveis' : 'peça personalizável'}`}
+        description="Pinte cada parte da peça e ajuste o acabamento."
         defaultOpen={false}
       >
 
@@ -1280,11 +1534,19 @@ export default function ControlsPanel({
       ================================================== */}
 
       <TabSection
-        mobileTab={mobileTab}
+        mobileTab={currentTab}
+        tabbed={tabbed}
         id="background"
+        step={4}
+        totalSteps={4}
+        iconName="layers"
         icon="◉"
         title="Fundo"
-        description="Ambiente da cena"
+        badge={{
+          text: background.type === 'image' && background.image ? 'Imagem' : 'Cor',
+          done: background.type === 'image' && Boolean(background.image),
+        }}
+        description="Escolha a cor ou a imagem que fica atrás do modelo."
       >
 
         <div className="segmented-control">
@@ -1642,63 +1904,50 @@ export default function ControlsPanel({
 
 
 
+      {!tabbed && (
       <button
         type="button"
         className="reset-all-button"
-        onClick={() => {
-          setArtZones((zones) => {
-            const next = { ...zones }
-
-            for (const zone of activeModel.printZones) {
-              next[zone.key] = {
-                ...next[zone.key],
-                widthMM: 210,
-                heightMM: 92,
-                offsetXMM: 0,
-                offsetYMM: 0,
-                mugRealHeightMM: 95,
-              }
-            }
-
-            return next
-          })
-
-          setBackground({
-            type: 'color',
-            color: '#F3ECE3',
-            image: null,
-            fit: 'cover',
-            zoom: 1,
-            offsetXFrac: 0.5,
-            offsetYFrac: 0.5,
-          })
-
-          setPartColors((prev) => {
-            const next = { ...prev }
-
-            for (const part of activeModel.colorParts) {
-              next[part.key] = part.default
-            }
-
-            return next
-          })
-
-          if (activeModel.glassOpacity) {
-            setGlassOpacity(activeModel.glassOpacity.default)
-          }
-
-          setMugShine(0.5)
-
-          toast.info('Configurações restauradas ao padrão.')
-        }}
+        onClick={resetAll}
       >
         ↺ Restaurar valores padrão
       </button>
+      )}
 
 
-      {!mobileTab && (
-      <div className="panel-footer">
-        Almatiê · Mockup 3D
+      {tabbed && (
+      <div className="panel-nav">
+
+        <button
+          type="button"
+          className="panel-nav-btn ghost"
+          onClick={() => goStep(stepIndex - 1)}
+          disabled={stepIndex <= 0}
+        >
+          <Icon name="arrow-left" size={16} />
+          Voltar
+        </button>
+
+        {stepIndex < steps.length - 1 ? (
+          <button
+            type="button"
+            className="panel-nav-btn primary"
+            onClick={() => goStep(stepIndex + 1)}
+          >
+            Próximo: {steps[stepIndex + 1].label}
+            <Icon name="arrow-right" size={16} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="panel-nav-btn primary"
+            onClick={goExport}
+          >
+            Ir para exportar
+            <Icon name="arrow-down" size={16} />
+          </button>
+        )}
+
       </div>
       )}
 

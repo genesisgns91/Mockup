@@ -331,6 +331,7 @@ export const MODELS = {
   azulejoRetangular: {
     id: 'azulejoRetangular', name: 'Azulejo Retangular', shortName: 'Azulejo Ret.', group: 'Casa',
     count: 1, file: 'model-azulejo-retangulo.obj', hasPaper: false,
+    hidden: true, // removido da exibição (modelo com defeito)
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.FLAT }],
     colorParts: [
       body(['back']),
@@ -340,6 +341,7 @@ export const MODELS = {
   mousepad: {
     id: 'mousepad', name: 'Mousepad', shortName: 'Mousepad', group: 'Casa',
     count: 1, file: 'model-mousepad.obj', hasPaper: false,
+    hidden: true, // removido da exibição (modelo com defeito)
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['mousepad'], mode: PRINT_MODE.FLAT }],
     colorParts: [
       body(),
@@ -400,6 +402,7 @@ export const MODELS = {
   mochilaSaco: {
     id: 'mochilaSaco', name: 'Mochila Saco', shortName: 'Mochila', group: 'Acessórios',
     count: 1, file: 'model-mochila-saco.obj', hasPaper: false,
+    hidden: true, // removido da exibição (modelo com defeito)
     printZones: [
       { key: 'front', label: 'Frente', meshNames: ['front'], mode: PRINT_MODE.FLAT },
       { key: 'back', label: 'Verso', meshNames: ['back'], mode: PRINT_MODE.FLAT },
@@ -442,6 +445,7 @@ export const MODELS = {
   longDrinkTransparente: {
     id: 'longDrinkTransparente', name: 'Long Drink Transparente', shortName: 'Long Drink Transp.', group: 'Bebidas',
     count: 1, file: 'model-long-drink-transparente.obj', hasPaper: false,
+    hidden: true, // removido da exibição (modelo com defeito)
     printZones: [{ key: 'main', label: 'Arte', meshNames: ['print'], mode: PRINT_MODE.CYLINDRICAL }],
     colorParts: [{ ...body(), material: MATERIAL.GLASS }],
     glassOpacity: { key: 'body', label: 'Transparência do copo', default: 0.8 },
