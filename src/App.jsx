@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import MugScene, { ROTATE_SECONDS } from './components/MugScene.jsx'
+import { ROTATE_SECONDS } from './components/MugScene.jsx'
 import ControlsPanel from './components/ControlsPanel.jsx'
+import Viewport from './components/Viewport.jsx'
+import ExportPanel from './components/ExportPanel.jsx'
+import MobileShell from './components/MobileShell.jsx'
 import { useToast } from './components/Toast.jsx'
-import { clamp01, getImageLayout } from './utils/exportLayout.js'
+import { useIsMobile } from './hooks/useIsMobile.js'
+import { EXPORT_FORMATS } from './config/exportFormats.js'
 import { getModel, DEFAULT_MODEL_ID } from './config/models.js'
+
+import { ALMATIE_URL } from './config/links.js'
 
 
 function downloadBlob(blob, filename) {
@@ -20,283 +26,6 @@ function downloadBlob(blob, filename) {
   setTimeout(
     () => URL.revokeObjectURL(url),
     2000
-  )
-}
-
-
-/*
-  ==========================================================
-  FORMATOS DE EXPORTAÇÃO
-
-  "free" mantém o comportamento original (tamanho do
-  viewport). Os demais recortam a imagem/vídeo final para
-  encaixar perfeitamente nas redes sociais, em alta
-  qualidade (1080px no lado maior).
-  ==========================================================
-*/
-const EXPORT_FORMATS = [
-  {
-    id: 'free',
-    label: 'Livre',
-    hint: 'Tamanho original',
-    width: null,
-    height: null,
-  },
-  {
-    id: 'square',
-    label: 'Quadrado',
-    hint: '1080×1080 · Feed',
-    width: 1080,
-    height: 1080,
-  },
-  {
-    id: 'portrait',
-    label: 'Retrato',
-    hint: '1080×1350 · Feed',
-    width: 1080,
-    height: 1350,
-  },
-  {
-    id: 'story',
-    label: 'Story',
-    hint: '1080×1920 · Stories/Reels/TikTok',
-    width: 1080,
-    height: 1920,
-  },
-]
-
-
-/*
-  ==========================================================
-  CAMADA DE FUNDO (IMAGEM)
-
-  Renderizada em HTML, atrás do canvas 3D (que fica
-  transparente quando o fundo é uma imagem). Aplica o
-  encaixe (cobrir / largura / altura), o zoom e a posição
-  de arraste vindos do painel de controle.
-
-  Fica só de leitura aqui: a interação de arrastar acontece
-  na pequena prévia dentro do painel, para não conflitar
-  com o gesto de girar a caneca no viewport.
-  ==========================================================
-*/
-function BackgroundImageLayer({ background, containerRef }) {
-  const [box, setBox] = useState({ width: 0, height: 0 })
-  const [natural, setNatural] = useState({ width: 0, height: 0 })
-
-  useEffect(() => {
-    const el = containerRef.current
-
-    if (!el) return undefined
-
-    const compute = () => {
-      const rect = el.getBoundingClientRect()
-      setBox({ width: rect.width, height: rect.height })
-    }
-
-    compute()
-
-    const ro = new ResizeObserver(compute)
-    ro.observe(el)
-
-    return () => ro.disconnect()
-  }, [containerRef])
-
-  useEffect(() => {
-    setNatural({ width: 0, height: 0 })
-  }, [background.image])
-
-  if (!background.image) return null
-
-  const layout = getImageLayout(
-    natural.width,
-    natural.height,
-    box.width,
-    box.height,
-    background.fit,
-    background.zoom,
-    background.offsetXFrac,
-    background.offsetYFrac
-  )
-
-  return (
-    <div className="bg-image-layer">
-      <img
-        src={background.image}
-        alt=""
-        draggable={false}
-        onLoad={(e) =>
-          setNatural({
-            width: e.target.naturalWidth,
-            height: e.target.naturalHeight,
-          })
-        }
-        style={{
-          width: `${layout.drawW}px`,
-          height: `${layout.drawH}px`,
-          transform: `translate(${layout.x}px, ${layout.y}px)`,
-          opacity: natural.width ? 1 : 0,
-        }}
-      />
-    </div>
-  )
-}
-
-
-/*
-  ==========================================================
-  GUIA DE CORTE
-
-  Sobrepõe ao viewport 3D um recorte que mostra exatamente
-  a área que será mantida na exportação final. Pode ser
-  arrastado (quando há espaço sobrando em algum eixo) para
-  escolher o que fica visível no formato escolhido.
-  ==========================================================
-*/
-function CropGuideOverlay({
-  containerRef,
-  format,
-  offsetXFrac,
-  offsetYFrac,
-  onOffsetChange,
-}) {
-  const [box, setBox] = useState(null)
-  const [containerSize, setContainerSize] = useState(null)
-  const dragRef = useRef(null)
-  const [dragging, setDragging] = useState(false)
-
-  useEffect(() => {
-    const el = containerRef.current
-
-    if (!el || !format) {
-      setBox(null)
-      setContainerSize(null)
-      return undefined
-    }
-
-    const compute = () => {
-      const rect = el.getBoundingClientRect()
-
-      if (!rect.width || !rect.height) return
-
-      const targetAspect = format.width / format.height
-      const containerAspect = rect.width / rect.height
-
-      let w
-      let h
-
-      if (targetAspect < containerAspect) {
-        h = rect.height
-        w = rect.height * targetAspect
-      } else {
-        w = rect.width
-        h = rect.width / targetAspect
-      }
-
-      setBox({ w, h })
-      setContainerSize({ w: rect.width, h: rect.height })
-    }
-
-    compute()
-
-    const ro = new ResizeObserver(compute)
-    ro.observe(el)
-
-    return () => ro.disconnect()
-  }, [containerRef, format])
-
-  if (!format || !box || !containerSize) return null
-
-  const slackX = Math.max(0, containerSize.w - box.w)
-  const slackY = Math.max(0, containerSize.h - box.h)
-  const canDrag = slackX > 2 || slackY > 2
-
-  const left = slackX * clamp01(offsetXFrac)
-  const top = slackY * clamp01(offsetYFrac)
-
-  const handlePointerDown = (e) => {
-    if (!canDrag) return
-
-    e.stopPropagation()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    setDragging(true)
-
-    dragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      startOffsetX: offsetXFrac,
-      startOffsetY: offsetYFrac,
-    }
-  }
-
-  const handlePointerMove = (e) => {
-    if (!dragRef.current) return
-
-    e.stopPropagation()
-
-    const deltaX = e.clientX - dragRef.current.startX
-    const deltaY = e.clientY - dragRef.current.startY
-
-    const nextX = slackX
-      ? clamp01(
-          dragRef.current.startOffsetX + deltaX / slackX
-        )
-      : 0.5
-
-    const nextY = slackY
-      ? clamp01(
-          dragRef.current.startOffsetY + deltaY / slackY
-        )
-      : 0.5
-
-    onOffsetChange(nextX, nextY)
-  }
-
-  const handlePointerUp = (e) => {
-    dragRef.current = null
-    setDragging(false)
-
-    if (e.currentTarget.releasePointerCapture) {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId)
-      } catch {
-        // ignora se o ponteiro já foi liberado
-      }
-    }
-  }
-
-  return (
-    <div className="crop-guide">
-      <div
-        className={
-          canDrag
-            ? `crop-guide-frame draggable${dragging ? ' dragging' : ''}`
-            : 'crop-guide-frame'
-        }
-        style={{
-          width: `${box.w}px`,
-          height: `${box.h}px`,
-          left: `${left}px`,
-          top: `${top}px`,
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-      >
-
-        <span className="crop-guide-tag">
-          {format.hint}
-        </span>
-
-        {canDrag && (
-          <span className="crop-guide-drag-hint">
-            ⇕ Arraste para ajustar o enquadramento
-          </span>
-        )}
-
-      </div>
-    </div>
   )
 }
 
@@ -428,6 +157,7 @@ function ExportPreviewModal({ data, onClose, onConfirm }) {
 
 export default function App() {
   const toast = useToast()
+  const isMobile = useIsMobile()
 
   /*
     Estado de "processando" só para dar feedback visual
@@ -913,12 +643,104 @@ const [videoEffect, setVideoEffect] =
   }
 
 
+  const handleCropOffsetChange = useCallback((x, y) => {
+    setCropOffsetXFrac(x)
+    setCropOffsetYFrac(y)
+  }, [])
+
+  const exportProps = {
+    exportFormatId,
+    setExportFormatId,
+    transparentBg,
+    setTransparentBg,
+    videoQuality,
+    setVideoQuality,
+    videoSpeed,
+    setVideoSpeed,
+    videoEffect,
+    setVideoEffect,
+    isRecording,
+    isExportingImage,
+    handleScreenshot,
+    handleRecord,
+    recordProgress,
+    exportError,
+  }
+
+  const viewportProps = {
+    viewportRef,
+    artZones,
+    background,
+    partColors,
+    glassOpacity,
+    mugShine,
+    modelId,
+    magicPlaying,
+    setMagicPlaying,
+    setWarning,
+    registerApi,
+    spinTargetRef,
+    videoSpeed,
+    videoEffect,
+    videoQuality,
+    activeFormat,
+    cropOffsetXFrac,
+    cropOffsetYFrac,
+    onCropOffsetChange: handleCropOffsetChange,
+  }
+
+  const controlsProps = {
+    artZones,
+    setArtZones,
+    background,
+    setBackground,
+    partColors,
+    setPartColors,
+    glassOpacity,
+    setGlassOpacity,
+    mugShine,
+    setMugShine,
+    modelId,
+    setModelId,
+    warning,
+  }
+
+
+  /*
+    ==========================================================
+    LAYOUT DE CELULAR
+
+    Em telas pequenas o site vira um "app": cena 3D em tela
+    cheia, abas inferiores e painel deslizante (bottom sheet).
+    Todo o estado continua aqui no App — o MobileShell só
+    organiza a apresentação.
+    ==========================================================
+  */
+  if (isMobile) {
+    return (
+      <>
+        <MobileShell
+          controlsProps={controlsProps}
+          viewportProps={viewportProps}
+          exportProps={exportProps}
+          almatieUrl={ALMATIE_URL}
+          isBusy={isRecording || isExportingImage}
+        />
+
+        <ExportPreviewModal
+          data={previewModal}
+          onClose={handleClosePreview}
+          onConfirm={handleConfirmDownload}
+        />
+      </>
+    )
+  }
+
+
   return (
     <div className="app">
 
-      {/* ==================================================
-          CABEÇALHO
-      ================================================== */}
+      {/* CABEÇALHO */}
 
       <header className="site-header">
 
@@ -945,6 +767,30 @@ const [videoEffect, setVideoEffect] =
 
         <div className="header-right">
 
+          <a
+            className="almatie-link"
+            href={ALMATIE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Ir para o site Almatiê"
+            aria-label="Ir para o site Almatiê (abre em nova aba)"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M7 17 17 7" />
+              <path d="M8 7h9v9" />
+            </svg>
+          </a>
+
           <span className="editor-status">
 
             <span className="status-dot" />
@@ -958,49 +804,22 @@ const [videoEffect, setVideoEffect] =
       </header>
 
 
-      {/* ==================================================
-          ÁREA PRINCIPAL
-      ================================================== */}
+      {/* ÁREA PRINCIPAL */}
 
       <div className="workspace">
 
-
-        <ControlsPanel
-          artZones={artZones}
-          setArtZones={setArtZones}
-
-          background={background}
-          setBackground={setBackground}
-
-          partColors={partColors}
-          setPartColors={setPartColors}
-
-          glassOpacity={glassOpacity}
-          setGlassOpacity={setGlassOpacity}
-
-          mugShine={mugShine}
-          setMugShine={setMugShine}
-
-          modelId={modelId}
-          setModelId={setModelId}
-
-          warning={warning}
-        />
+        <ControlsPanel {...controlsProps} />
 
 
-        {/* ==================================================
-            ÁREA 3D
-        ================================================== */}
-
-<main
-  className="stage"
-  style={{
-    display: 'flex',
-    flexDirection: 'column',
-    width: '100%',
-    minWidth: 0,
-  }}
->
+        <main
+          className="stage"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
 
           <div className="stage-header">
 
@@ -1016,546 +835,41 @@ const [videoEffect, setVideoEffect] =
 
             </div>
 
-
             <div className="scene-badge">
-
               {getModel(modelId).name}
-
             </div>
 
           </div>
 
 
           <div
-  className="viewport-card"
-  style={{
-    position: 'relative',
-    zIndex: 1,
-    width: '100%',
-    flexShrink: 0,
-    marginBottom: '24px',
-  }}
->
-
-  <div
-    className="viewport"
-    ref={viewportRef}
-    style={{
-      position: 'relative',
-      overflow: 'hidden',
-      isolation: 'isolate',
-    }}
-  >
-
-    {/* FUNDO SÓLIDO DO VIEWPORT */}
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        background:
-          background.type === 'color'
-            ? background.color
-            : 'transparent',
-        zIndex: 0,
-        pointerEvents: 'none',
-      }}
-    />
-
-
-    {/* FUNDO DE IMAGEM */}
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 1,
-        pointerEvents: 'none',
-      }}
-    >
-      <BackgroundImageLayer
-        background={background}
-        containerRef={viewportRef}
-      />
-    </div>
-
-
-    {/* CANECA 3D */}
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 2,
-      }}
-    >
-      <MugScene
-        artZones={artZones}
-
-        background={background}
-
-        partColors={partColors}
-
-        glassOpacity={glassOpacity}
-
-        mugShine={mugShine}
-
-        modelId={modelId}
-
-        magicPlaying={magicPlaying}
-
-        onWarning={setWarning}
-
-        registerApi={registerApi}
-
-        spinTargetRef={spinTargetRef}
-
-        videoSpeed={videoSpeed}
-
-        videoEffect={videoEffect}
-
-        videoQuality={videoQuality}
-      />
-    </div>
-
-
-    {/* GUIA DE CORTE */}
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 4,
-        pointerEvents: 'none',
-      }}
-    >
-      <CropGuideOverlay
-        containerRef={viewportRef}
-        format={
-          activeFormat.width
-            ? activeFormat
-            : null
-        }
-        offsetXFrac={cropOffsetXFrac}
-        offsetYFrac={cropOffsetYFrac}
-        onOffsetChange={(x, y) => {
-          setCropOffsetXFrac(x)
-          setCropOffsetYFrac(y)
-        }}
-      />
-    </div>
-
-
-    {/* BOTÃO DE PLAY — só aparece em modelos com animação (Caneca Mágica) */}
-    {getModel(modelId).magicAnimation && !magicPlaying && (
-
-      <button
-        type="button"
-        className="magic-play-button"
-        style={{
-          position: 'absolute',
-          zIndex: 6,
-        }}
-        onClick={() => setMagicPlaying(true)}
-      >
-
-        <span className="magic-play-icon">
-          ▶
-        </span>
-
-        Ver efeito térmico
-
-      </button>
-
-    )}
-
-
-    {/* AJUDA */}
-    <div
-      className="viewport-help"
-      style={{
-        position: 'absolute',
-        zIndex: 5,
-      }}
-    >
-
-      <span className="help-icon">
-        ↔
-      </span>
-
-      Arraste para girar
-
-      <span className="help-divider">
-        •
-      </span>
-
-      Scroll para aproximar
-
-    </div>
-
-  </div>
-
-</div>
-
-
-          {/* ==================================================
-              EXPORTAÇÃO
-          ================================================== */}
-
-<div
-  className="export-card"
-  style={{
-    position: 'relative',
-    zIndex: 10,
-    width: '100%',
-    flexShrink: 0,
-    marginTop: '0',
-    clear: 'both',
-  }}
->
-
-            <div className="export-heading">
-
-              <div>
-
-                <span>
-                  FINALIZE SEU MOCKUP
-                </span>
-
-                <strong>
-                  Exporte sua criação
-                </strong>
-
-              </div>
-
-
-              <div className="ink-mark">
-                ✦
-              </div>
-
-            </div>
-
-
-            {/* ==================================================
-                FORMATO DE EXPORTAÇÃO
-            ================================================== */}
-
-            <div className="format-selector">
-
-              <div className="format-selector-heading">
-                <strong>
-                  Formato de exportação
-                </strong>
-
-                <small>
-                  Escolha a proporção ideal para cada rede social
-                </small>
-              </div>
-
-
-              <div className="format-options">
-
-                {EXPORT_FORMATS.map((format) => (
-
-                  <button
-                    key={format.id}
-                    type="button"
-                    className={
-                      exportFormatId === format.id
-                        ? 'format-option active'
-                        : 'format-option'
-                    }
-                    onClick={() =>
-                      setExportFormatId(format.id)
-                    }
-                  >
-
-                    <span
-                      className={`format-shape shape-${format.id}`}
-                    />
-
-                    <span className="format-option-text">
-                      <strong>
-                        {format.label}
-                      </strong>
-
-                      <small>
-                        {format.hint}
-                      </small>
-                    </span>
-
-                  </button>
-
-                ))}
-
-              </div>
-
-
-              <label className="transparent-toggle">
-
-                <span className="transparent-toggle-text">
-                  <strong>
-                    Fundo transparente
-                  </strong>
-
-                  <small>
-                    Remove o fundo da imagem (apenas PNG)
-                  </small>
-                </span>
-
-                <span className="switch">
-
-                  <input
-                    type="checkbox"
-                    checked={transparentBg}
-                    onChange={(e) =>
-                      setTransparentBg(e.target.checked)
-                    }
-                  />
-
-                  <span className="switch-track">
-                    <span className="switch-thumb" />
-                  </span>
-
-                </span>
-
-              </label>
-
-            </div>
-
-            <div
-  className="video-settings"
-  style={{
-    marginBottom: '16px',
-    display: 'grid',
-    gap: '12px',
-  }}
->
-  <div>
-  <div>
-  <strong>
-    Qualidade do vídeo
-  </strong>
-
-  <div
-    style={{
-      display: 'flex',
-      gap: '8px',
-      marginTop: '8px',
-      flexWrap: 'wrap',
-    }}
-  >
-    {[
-      {
-        id: 'low',
-        label: 'Baixo',
-        hint: '360p',
-      },
-      {
-        id: 'standard',
-        label: 'Padrão',
-        hint: '720p',
-      },
-      {
-        id: 'high',
-        label: 'Alto',
-        hint: '1080p',
-      },
-    ].map((quality) => (
-      <button
-        key={quality.id}
-        type="button"
-        className={
-          videoQuality === quality.id
-            ? 'btn btn-primary'
-            : 'btn btn-secondary'
-        }
-        onClick={() =>
-          setVideoQuality(quality.id)
-        }
-        disabled={isRecording}
-      >
-        {quality.label}
-        <small
-          style={{
-            display: 'block',
-            marginTop: '2px',
-          }}
-        >
-          {quality.hint}
-        </small>
-      </button>
-    ))}
-  </div>
-</div>
-
-    <strong>
-      Velocidade do vídeo
-    </strong>
-
-    <div
-      style={{
-        display: 'flex',
-        gap: '8px',
-        marginTop: '8px',
-      }}
-    >
-      {[0.5, 1, 2].map(
-        (speed) => (
-          <button
-            key={speed}
-            type="button"
-            className={
-              videoSpeed === speed
-                ? 'btn btn-primary'
-                : 'btn btn-secondary'
-            }
-            onClick={() =>
-              setVideoSpeed(speed)
-            }
-            disabled={isRecording}
+            className="viewport-card"
+            style={{
+              position: 'relative',
+              zIndex: 1,
+              width: '100%',
+              flexShrink: 0,
+              marginBottom: '24px',
+            }}
           >
-            {speed}x
-          </button>
-        )
-      )}
-    </div>
-  </div>
-
-  <div>
-    <strong>
-      Efeito
-    </strong>
-
-    <select
-      value={videoEffect}
-      onChange={(e) =>
-        setVideoEffect(
-          e.target.value
-        )
-      }
-      disabled={isRecording}
-      style={{
-        width: '100%',
-        marginTop: '8px',
-        padding: '10px',
-        borderRadius: '8px',
-      }}
-    >
-      <option value="mug">
-        Giro da caneca
-      </option>
-
-      <option value="zoom">
-        Zoom lento
-      </option>
-
-      <option value="camera-up">
-        Câmera subindo
-      </option>
-
-      <option value="camera-spin">
-        Giro da câmera
-      </option>
-
-      <option value="zoom-mug">
-        Giro + zoom
-      </option>
-
-      <option value="none">
-        Sem movimento
-      </option>
-    </select>
-  </div>
-</div>
-
-            <div className="export-actions">
+            <Viewport {...viewportProps} />
+          </div>
 
 
-              <button
-                className="btn btn-primary export-button"
-                onClick={handleScreenshot}
-                disabled={isExportingImage}
-                aria-busy={isExportingImage}
-              >
+          {/* EXPORTAÇÃO */}
 
-                <span className="button-symbol">
-                  {isExportingImage ? '⟳' : '↓'}
-                </span>
-
-                <span>
-
-                  <strong>
-                    {isExportingImage ? 'Gerando...' : 'Salvar PNG'}
-                  </strong>
-
-                  <small>
-                    Imagem em alta qualidade
-                  </small>
-
-                </span>
-
-              </button>
-
-
-              <button
-                className="btn btn-secondary export-button"
-                onClick={handleRecord}
-                disabled={isRecording}
-              >
-
-                <span className="button-symbol">
-
-                  {isRecording
-                    ? '●'
-                    : '▶'}
-
-                </span>
-
-                <span>
-
-                  <strong>
-
-                    {isRecording
-                      ? 'Gravando...'
-                      : 'Vídeo 360°'}
-
-                  </strong>
-
-                  <small>
-                    Apresentação animada
-                  </small>
-
-                </span>
-
-              </button>
-
-
-            </div>
-
-
-            {isRecording && (
-
-              <div className="record-progress">
-                <div
-                  className="record-progress-fill"
-                  style={{ width: `${recordProgress}%` }}
-                />
-              </div>
-
-            )}
-
-
-            {exportError && (
-
-              <div className="export-note">
-
-                <span>
-                  !
-                </span>
-
-                {exportError}
-
-              </div>
-
-            )}
-
+          <div
+            className="export-card"
+            style={{
+              position: 'relative',
+              zIndex: 10,
+              width: '100%',
+              flexShrink: 0,
+              marginTop: '0',
+              clear: 'both',
+            }}
+          >
+            <ExportPanel {...exportProps} />
           </div>
 
         </main>

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { clamp01, getImageLayout } from '../utils/exportLayout.js'
 import { useToast } from './Toast.jsx'
-import { MODELS, MODEL_GROUPS, getModel } from '../config/models.js'
+import { getModel } from '../config/models.js'
+import { ModelPickerModal, getModelsByGroup, thumbUrl } from './ModelPicker.jsx'
 
 
 /*
@@ -12,134 +13,21 @@ import { MODELS, MODEL_GROUPS, getModel } from '../config/models.js'
 const MIN_PX_PER_MM = 8
 
 
-function thumbUrl(id) {
-  return `${import.meta.env.BASE_URL}thumbnails/${id}.png`
-}
-
-
 /*
-  ==========================================================
-  MODAL DE ESCOLHA DE MODELO
-
-  Tela cheia com todos os modelos em grade, com miniatura real
-  e nome — agrupados por categoria. Substitui o antigo painel
-  que expandia/recolhia dentro do menu lateral.
-  ==========================================================
+  No celular cada seção vira uma aba do painel inferior: só a
+  aba ativa é mostrada, sem o cabeçalho de acordeão. No desktop
+  continua sendo o acordeão de sempre.
 */
-function ModelPickerModal({
-  modelsByGroup,
-  activeModelId,
-  onSelect,
-  onClose,
-}) {
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      if (e.key === 'Escape') onClose()
-    }
-
-    window.addEventListener('keydown', onKeyDown)
-
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
-
-  return (
-    <div
-      className="model-picker-backdrop"
-      onClick={onClose}
-    >
-
-      <div
-        className="model-picker-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-
-        <div className="model-picker-header">
-
-          <div>
-
-            <h3>
-              Escolha o modelo
-            </h3>
-
-            <p>
-              Selecione o produto que você quer personalizar
-            </p>
-
-          </div>
-
-          <button
-            type="button"
-            className="model-picker-close"
-            onClick={onClose}
-            aria-label="Fechar"
-          >
-            ✕
-          </button>
-
-        </div>
-
-
-        <div className="model-picker-body">
-
-          {modelsByGroup.map(({ group, items }) => (
-
-            <div key={group} className="model-picker-group">
-
-              <span className="model-picker-group-title">
-                {group}
-              </span>
-
-              <div className="model-picker-grid">
-
-                {items.map((model) => (
-
-                  <button
-                    key={model.id}
-                    type="button"
-                    className={
-                      activeModelId === model.id
-                        ? 'model-card active'
-                        : 'model-card'
-                    }
-                    onClick={() => onSelect(model.id)}
-                  >
-
-                    <span className="model-card-thumb">
-
-                      <img
-                        src={thumbUrl(model.id)}
-                        alt=""
-                        loading="lazy"
-                      />
-
-                      {activeModelId === model.id && (
-                        <span className="model-card-check">
-                          ✓
-                        </span>
-                      )}
-
-                    </span>
-
-                    <span className="model-card-name">
-                      {model.shortName}
-                    </span>
-
-                  </button>
-
-                ))}
-
-              </div>
-
-            </div>
-
-          ))}
-
-        </div>
-
+function TabSection({ mobileTab, id, children, ...rest }) {
+  if (mobileTab) {
+    return mobileTab === id ? (
+      <div className="m-tab-content">
+        {children}
       </div>
+    ) : null
+  }
 
-    </div>
-  )
+  return <Section {...rest}>{children}</Section>
 }
 
 
@@ -378,6 +266,8 @@ export default function ControlsPanel({
   modelId,
   setModelId,
   warning,
+
+  mobileTab = null,
 }) {
 
   const [showCalibration, setShowCalibration] =
@@ -540,24 +430,17 @@ export default function ControlsPanel({
   const completedSteps = steps.filter((s) => s.done).length
 
 
-  /*
-    Lista de modelos vem do catálogo central (src/config/models.js),
-    agrupada por categoria (Canecas, Vestuário, Casa, Acessórios,
-    Bebidas) para ficar navegável mesmo com dezenas de opções.
-  */
-  const modelsByGroup = MODEL_GROUPS.map((group) => ({
-    group,
-    items: Object.values(MODELS).filter((m) => m.group === group && !m.hidden),
-  })).filter((g) => g.items.length > 0)
+  const modelsByGroup = getModelsByGroup()
 
 
   return (
-    <aside className="panel">
+    <aside className={mobileTab ? 'panel panel-mobile' : 'panel'}>
 
       {/* ==================================================
           CABEÇALHO DO PAINEL
       ================================================== */}
 
+      {!mobileTab && (
       <div className="panel-heading">
 
         <span className="section-kicker">
@@ -598,12 +481,15 @@ export default function ControlsPanel({
         </div>
 
       </div>
+      )}
 
 
       {/* ==================================================
           MODELO
       ================================================== */}
 
+      {!mobileTab && (
+      <>
       <button
         type="button"
         className="model-trigger"
@@ -650,13 +536,17 @@ export default function ControlsPanel({
         />
 
       )}
+      </>
+      )}
 
 
       {/* ==================================================
           SUA ARTE
       ================================================== */}
 
-      <Section
+      <TabSection
+        mobileTab={mobileTab}
+        id="art"
         icon="✦"
         title="Sua arte"
         description={
@@ -1038,14 +928,16 @@ export default function ControlsPanel({
 
         )}
 
-      </Section>
+      </TabSection>
 
 
       {/* ==================================================
           CORES
       ================================================== */}
 
-      <Section
+      <TabSection
+        mobileTab={mobileTab}
+        id="colors"
         icon="●"
         title="Cores"
         description={`${activeModel.colorParts.length} ${activeModel.colorParts.length > 1 ? 'peças personalizáveis' : 'peça personalizável'}`}
@@ -1176,14 +1068,16 @@ export default function ControlsPanel({
           existe impressão.
         </p>
 
-      </Section>
+      </TabSection>
 
 
       {/* ==================================================
           FUNDO
       ================================================== */}
 
-      <Section
+      <TabSection
+        mobileTab={mobileTab}
+        id="background"
         icon="◉"
         title="Fundo"
         description="Ambiente da cena"
@@ -1460,7 +1354,7 @@ export default function ControlsPanel({
 
         )}
 
-      </Section>
+      </TabSection>
 
 
       {/* ==================================================
@@ -1523,9 +1417,11 @@ export default function ControlsPanel({
       </button>
 
 
+      {!mobileTab && (
       <div className="panel-footer">
         Almatiê · Mockup 3D
       </div>
+      )}
 
     </aside>
   )
