@@ -1,66 +1,64 @@
-# Mockup 3D de Caneca
+# Almatiê · Mockup 3D
 
-Projeto React (Vite) com Three.js / @react-three/fiber para gerar mockups 3D de caneca
-com upload de arte, ajuste de tamanho/posição e fundo customizável.
+Editor de mockups 3D de canecas e outros produtos, feito com React + Three.js (react-three-fiber).
+Funciona no computador e no celular (a interface vira um "app" em telas pequenas).
 
-## Como usar no StackBlitz (versão gratuita)
+Publicado em: https://genesisgns91.github.io/Mockup/ · Site da loja: https://genesisgns91.github.io/Almatie/
 
-1. Em stackblitz.com, clique em **"New Project" → "React"** (isso cria um template padrão).
-2. Apague os arquivos do template gerado (pasta `src/` e `package.json`) e cole os arquivos
-   deste projeto no lugar, mantendo a mesma estrutura de pastas:
-   ```
-   package.json
-   vite.config.js
-   index.html
-   src/main.jsx
-   src/App.jsx
-   src/index.css
-   src/components/MugScene.jsx
-   src/components/ControlsPanel.jsx
-   src/hooks/useDecalTexture.js
-   public/model.obj       <-- modelo de 1 caneca
-   public/model-duo.obj   <-- modelo de 2 canecas lado a lado
-   ```
-3. O StackBlitz vai instalar as dependências (`three`, `@react-three/fiber`, `@react-three/drei`)
-   automaticamente a partir do `package.json`.
-4. Rode `npm run dev` (ou deixe o StackBlitz rodar automaticamente).
+## O que ele faz
 
-## Como funciona o mapeamento da arte na caneca
+- Escolha do **modelo** 3D (canecas, copos, garrafas etc.), envio da **arte** em uma ou mais áreas, **cores** por parte, **fundo** (cor ou imagem).
+- **Exportação** em PNG/JPG/WebP (1×, 2× ou 3×) e vídeo 360°, nos quadros Livre, Quadrado, Retrato, Story e Paisagem.
+- Desktop com três tamanhos de visualização (teclas 1, 2 e 3): retangular, quadrado e expandido.
+- Salvamento automático no navegador, desfazer/refazer (Ctrl+Z / Ctrl+Shift+Z), arrastar ou colar (Ctrl+V) imagens sobre a cena.
+- Funciona offline depois da primeira visita (service worker) e pode ser adicionado à tela inicial do celular.
 
-O modelo `model.obj` já vem com um objeto separado chamado **"decal"**, cujo UV cobre toda a
-volta da caneca (`u: 0 a 1`) e a altura da parede de cima a baixo (`v: 0 a 1`). A costura do UV
-(`u = 0 / u = 1`) fica exatamente atrás da alça — por isso a arte enviada é desenhada centralizada
-na textura, deixando as bordas esquerda/direita transparentes, o que automaticamente resulta em
-uma faixa em branco atrás da alça e a arte não "se conecta" nas pontas.
+## Como rodar
 
-- **Largura/Altura (mm)**: tamanho real da arte impressa na caneca (padrão 210 x 92 mm).
-- **Deslocamento horizontal/vertical**: reposiciona a arte dentro da área disponível.
-- **Altura real da caneca (calibração)**: como o modelo 3D não tem uma unidade real definida,
-  esse campo informa ao app a altura real (em mm) da parede da caneca física, e todo o resto
-  (circunferência, proporção da arte) é recalculado a partir disso automaticamente.
-- O topo, o fundo e a alça usam materiais cerâmicos próprios e nunca recebem a arte, pois são
-  objetos separados no modelo (`inside`, `bottom`, `handle`, `other`, `print`).
+```bash
+npm install
+npm run dev      # desenvolvimento
+npm test         # testes automáticos
+npm run build    # gera a pasta dist/
+```
 
-## 1 ou 2 canecas
+O deploy no GitHub Pages é automático a cada push na branch `main` (`.github/workflows/deploy.yml`):
+instala, **roda os testes**, faz o build e publica.
 
-O painel lateral tem um seletor "1 caneca" / "2 canecas". Cada opção carrega um arquivo `.obj`
-diferente (`model.obj` ou `model-duo.obj`), então a troca é instantânea. A mesma arte, cor de
-caneca e fundo se aplicam às duas canecas quando "2 canecas" está selecionado. A câmera se
-reenquadra automaticamente para caber a cena inteira (1 ou 2 canecas) na janela.
+## Estrutura
 
-No modelo de 2 canecas há dois pequenos blocos técnicos chamados "pivot"/"pivot.001" (marcadores
-deixados pelo Blender) — o app já os esconde automaticamente, eles nunca aparecem no render.
+```
+index.html                 página base (meta tags de app, manifesto)
+icon_A.*                   (opcional) logotipo do topo — na raiz ou em src/assets/
+public/                    arquivos servidos como estão
+  model*.obj               modelos 3D            thumbnails/   miniaturas do seletor
+  manifest.webmanifest     app instalável        sw.js         service worker (offline)
+src/
+  App.jsx                  estado do projeto, envio de imagens, salvamento, histórico
+  config/                  models.js (catálogo), exportFormats.js, links.js
+  hooks/                   useIsMobile, useHistory (desfazer/refazer)
+  utils/                   exportLayout (encaixe de imagem), imageFiles, persistence
+  components/
+    ControlsPanel.jsx      painel "Seu mockup" (abas por etapa)
+      controls/            ModelPane, ArtPane, ColorsPane, BackgroundPane, Section, ArtSlots…
+    Viewport.jsx           quadro da cena, carregamento, erros, arrastar-e-soltar
+    MugScene.jsx           canvas 3D
+      scene/               Mug, materiais, câmera, captura (PNG/vídeo), teclado…
+    MobileShell.jsx        layout de app (celular e modo expandido do desktop)
+    StageControls.jsx      seletores de tamanho/quadro e botões de salvar
+    ExportPanel.jsx        opções de exportação
+tests/                     testes (vitest + jsdom)
+```
 
-## Fundo
+## Como adicionar um modelo 3D
 
-- **Cor sólida**: escolha qualquer cor via seletor de cor.
-- **Imagem**: envie uma imagem para usar como fundo da cena.
+1. Coloque o `.obj` em `public/` e a miniatura em `public/thumbnails/<id>.png`.
+2. Cadastre em `src/config/models.js` (id, nome, grupo, arquivo, áreas de arte, partes coloridas).
+   Para esconder um modelo sem apagá-lo, use `hidden: true`.
+3. Rode `npm test`: ele confere se o arquivo e a miniatura existem.
 
-## Iluminação e renderização
+## Observações
 
-- Ambiente HDRI (`Environment preset="apartment"`) para reflexos realistas de cerâmica.
-- Luz direcional principal com sombras suaves + luz de preenchimento.
-- Sombra de contato (`ContactShadows`) sob a caneca.
-- Tone mapping ACES Filmic + material `MeshPhysicalMaterial` com clearcoat para o acabamento
-  brilhante típico de cerâmica.
-- `OrbitControls` para girar/aproximar a caneca livremente.
+- As imagens enviadas ficam **somente no navegador** do usuário (IndexedDB); nada é enviado a servidores.
+- Imagens maiores que 4096 px são reduzidas automaticamente para evitar travamentos em celulares.
+- Para forçar a atualização do cache offline, aumente `VERSION` em `public/sw.js`.
