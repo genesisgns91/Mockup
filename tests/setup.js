@@ -7,8 +7,9 @@ class ResizeObserverStub {
   disconnect() {}
 }
 
-globalThis.ResizeObserver = globalThis.ResizeObserver || ResizeObserverStub
+if (typeof window !== 'undefined') globalThis.ResizeObserver = globalThis.ResizeObserver || ResizeObserverStub
 
+if (typeof window !== 'undefined') {
 window.matchMedia =
   window.matchMedia ||
   ((query) => ({
@@ -22,3 +23,4 @@ window.matchMedia =
   }))
 
 Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || vi.fn()
+}
