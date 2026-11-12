@@ -4,7 +4,9 @@ import ControlsPanel from './components/ControlsPanel.jsx'
 import Viewport from './components/Viewport.jsx'
 import ExportPanel from './components/ExportPanel.jsx'
 import MobileShell from './components/MobileShell.jsx'
-import BrandLink from './components/BrandMark.jsx'
+import SiteHeader from './components/SiteHeader.jsx'
+import SheetStudio from './sheet/SheetStudio.jsx'
+import { useSheetState } from './sheet/useSheetState.js'
 import {
   FormatSwitch,
   ViewSizeSwitch,
@@ -443,6 +445,46 @@ const [videoEffect, setVideoEffect] =
         return 'wide'
       }
     })
+
+  /*
+    Ferramenta aberta: "mockup" (3D) ou "sheet" (gabarito de impressão).
+    Lembra a última e aceita o endereço com #gabarito.
+  */
+  const [section, setSection] = useState(() => {
+    try {
+      if (window.location.hash === '#gabarito') return 'sheet'
+      if (window.location.hash === '#mockup') return 'mockup'
+
+      return localStorage.getItem('almatie-mockup:section') === 'sheet' ? 'sheet' : 'mockup'
+    } catch {
+      return 'mockup'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('almatie-mockup:section', section)
+
+      const url = `${window.location.pathname}${window.location.search}${section === 'sheet' ? '#gabarito' : ''}`
+
+      window.history.replaceState(null, '', url)
+    } catch {
+      // ambiente sem histórico/armazenamento
+    }
+  }, [section])
+
+  useEffect(() => {
+    const onHash = () => {
+      if (window.location.hash === '#gabarito') setSection('sheet')
+      if (window.location.hash === '#mockup') setSection('mockup')
+    }
+
+    window.addEventListener('hashchange', onHash)
+
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const sheet = useSheetState()
 
   useEffect(() => {
     try {
@@ -1263,10 +1305,21 @@ const [videoEffect, setVideoEffect] =
     organiza a apresentação.
     ==========================================================
   */
+  if (section === 'sheet') {
+    return (
+      <SheetStudio
+        sheet={sheet}
+        isMobile={isMobile}
+        onSection={setSection}
+      />
+    )
+  }
+
   if (isMobile) {
     return (
       <>
         <MobileShell
+          onOpenSheet={() => setSection('sheet')}
           controlsProps={controlsProps}
           viewportProps={viewportProps}
           exportProps={exportProps}
@@ -1315,28 +1368,11 @@ const [videoEffect, setVideoEffect] =
 
       {/* CABEÇALHO */}
 
-      <header className="site-header">
-
-        <div className="brand-container">
-
-          <BrandLink href={ALMATIE_URL} />
-
-          <div className="brand">
-
-            <h1>
-              Almatiê
-            </h1>
-
-            <span>
-              Mockup 3D de Canecas
-            </span>
-
-          </div>
-
-        </div>
-
-
-        <div className="header-right">
+      <SiteHeader
+        section="mockup"
+        onSection={setSection}
+        subtitle="Mockup 3D de Canecas"
+      >
 
           <div className="history-buttons">
 
@@ -1377,9 +1413,7 @@ const [videoEffect, setVideoEffect] =
 
           </span>
 
-        </div>
-
-      </header>
+      </SiteHeader>
 
 
       {/* ÁREA PRINCIPAL */}

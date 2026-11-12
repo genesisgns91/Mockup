@@ -53,7 +53,15 @@ function loadImage(url) {
   })
 }
 
-export async function prepareImage(file, name, { maxSize = MAX_IMAGE_PX } = {}) {
+/*
+  track: true (padrão) registra a URL no controle do histórico do mockup.
+  O gabarito usa track:false e cuida das próprias URLs.
+*/
+export async function prepareImage(
+  file,
+  name,
+  { maxSize = MAX_IMAGE_PX, track = true } = {}
+) {
   let blob = file
   let url = URL.createObjectURL(blob)
   let img
@@ -98,7 +106,7 @@ export async function prepareImage(file, name, { maxSize = MAX_IMAGE_PX } = {}) 
     }
   }
 
-  registerUrl(url, blob)
+  if (track) registerUrl(url, blob)
 
   return {
     img,

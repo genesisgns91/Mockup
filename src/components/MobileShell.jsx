@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import Viewport from './Viewport.jsx'
 import ControlsPanel from './ControlsPanel.jsx'
 import ExportPanel from './ExportPanel.jsx'
@@ -10,6 +10,7 @@ import {
 import { getModel } from '../config/models.js'
 import BrandLink from './BrandMark.jsx'
 import { Icon } from './Icons.jsx'
+import { useSheetDrag, vibrate } from '../hooks/useSheetDrag.js'
 import { ViewSizeSwitch, QuickActions } from './StageControls.jsx'
 
 
@@ -52,15 +53,6 @@ const SHEET_TITLES = {
 const HINT_KEY = 'almatie-mockup:gesture-hint-seen'
 
 
-function vibrate(ms = 8) {
-  try {
-    if (navigator.vibrate) navigator.vibrate(ms)
-  } catch {
-    // dispositivos sem vibração simplesmente ignoram
-  }
-}
-
-
 export default function MobileShell({
   controlsProps,
   viewportProps,
@@ -69,6 +61,7 @@ export default function MobileShell({
   isBusy,
 
   history = null,
+  onOpenSheet = null,
 
   desktop = false,
   viewMode = 'expanded',
@@ -83,8 +76,6 @@ export default function MobileShell({
   const [showHint, setShowHint] = useState(false)
   const [showArtCta, setShowArtCta] = useState(false)
 
-  const sheetRef = useRef(null)
-  const dragRef = useRef(null)
 
   const activeModel = getModel(modelId)
 
@@ -193,94 +184,11 @@ export default function MobileShell({
   }
 
 
-  /*
-    ---------- arrastar o painel ----------
-    Durante o arraste mexemos direto no estilo do elemento
-    (sem setState) para não re-renderizar a cena 3D a cada
-    movimento do dedo.
-  */
-  const onGrabDown = (e) => {
-    const el = sheetRef.current
-    if (!el) return
-
-    e.currentTarget.setPointerCapture(e.pointerId)
-
-    dragRef.current = {
-      startY: e.clientY,
-      lastY: e.clientY,
-      lastT: performance.now(),
-      velocity: 0,
-      dy: 0,
-      moved: false,
-    }
-
-    el.style.transition = 'none'
-  }
-
-  const onGrabMove = (e) => {
-    const d = dragRef.current
-    const el = sheetRef.current
-    if (!d || !el) return
-
-    const now = performance.now()
-    const dt = Math.max(1, now - d.lastT)
-
-    d.velocity = (e.clientY - d.lastY) / dt
-    d.lastY = e.clientY
-    d.lastT = now
-
-    let dy = e.clientY - d.startY
-
-    if (Math.abs(dy) > 4) d.moved = true
-
-    // resistência elástica ao puxar além do topo
-    const maxUp = snap === 'half' ? -Math.round(window.innerHeight * 0.4) : 0
-    if (dy < maxUp) dy = maxUp + (dy - maxUp) * 0.25
-    if (snap === 'full' && dy < 0) dy *= 0.2
-
-    d.dy = dy
-    el.style.setProperty('--m-drag', `${dy}px`)
-  }
-
-  const onGrabUp = (e) => {
-    const d = dragRef.current
-    const el = sheetRef.current
-    dragRef.current = null
-
-    if (!d || !el) return
-
-    try {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    } catch {
-      // ponteiro já liberado
-    }
-
-    el.style.transition = ''
-    el.style.removeProperty('--m-drag')
-
-    // toque simples no puxador alterna meia tela ↔ tela cheia
-    if (!d.moved) {
-      vibrate(6)
-      setSnap((s) => (s === 'half' ? 'full' : 'half'))
-      return
-    }
-
-    const fast = Math.abs(d.velocity) > 0.55
-
-    if (snap === 'half') {
-      if (d.dy > 70 || (fast && d.velocity > 0)) {
-        vibrate(6)
-        setTab(null)
-      } else if (d.dy < -50 || (fast && d.velocity < 0)) {
-        vibrate(6)
-        setSnap('full')
-      }
-    } else if (d.dy > 90 || (fast && d.velocity > 0)) {
-      vibrate(6)
-      if (d.dy > 260) setTab(null)
-      else setSnap('half')
-    }
-  }
+  const { sheetRef, onGrabDown, onGrabMove, onGrabUp } = useSheetDrag({
+    snap,
+    setSnap,
+    close: () => setTab(null),
+  })
 
 
   const modelsByGroup = getModelsByGroup()
@@ -371,6 +279,21 @@ export default function MobileShell({
           )}
 
           <BrandLink href={almatieUrl} variant="mobile" />
+
+          {onOpenSheet && !desktop && (
+            <button
+              type="button"
+              className="m-icon-btn"
+              onClick={() => {
+                vibrate(8)
+                onOpenSheet()
+              }}
+              aria-label="Abrir o gabarito de impressão"
+              title="Gabarito de impressão"
+            >
+              <Icon name="sheet" size={19} />
+            </button>
+          )}
 
           {history && (
             <button

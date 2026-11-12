@@ -146,6 +146,56 @@ export function Icon({ name, size = 22 }) {
           <path d="M19.5 11.5H9a4.5 4.5 0 0 0 0 9h3" />
         </svg>
       )
+    case 'ruler':
+      return (
+        <svg {...common}>
+          <rect x="3" y="8" width="18" height="8" rx="2" />
+          <path d="M7 8v3M11 8v4M15 8v3M19 8v2" />
+        </svg>
+      )
+    case 'sliders':
+      return (
+        <svg {...common}>
+          <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+          <circle cx="15" cy="7" r="2" />
+          <circle cx="9" cy="17" r="2" />
+        </svg>
+      )
+    case 'sheet':
+      return (
+        <svg {...common}>
+          <path d="M7 3.5h7l4 4v13H7a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1Z" />
+          <path d="M14 3.5V8h4" />
+          <path d="M9 12.5h6M9 16h4" />
+        </svg>
+      )
+    case 'flip':
+      return (
+        <svg {...common}>
+          <path d="M12 3v18" strokeDasharray="2 3" />
+          <path d="M8.5 7 4 12l4.5 5V7Z" />
+          <path d="m15.5 7 4.5 5-4.5 5V7Z" />
+        </svg>
+      )
+    case 'trash':
+      return (
+        <svg {...common}>
+          <path d="M4.5 7h15M10 7V4.5h4V7M6.5 7l.8 12.5h9.4L17.5 7" />
+        </svg>
+      )
+    case 'upload':
+      return (
+        <svg {...common}>
+          <path d="M12 16V5M7.5 9 12 4.5 16.5 9" />
+          <path d="M5 19.5h14" />
+        </svg>
+      )
+    case 'back':
+      return (
+        <svg {...common}>
+          <path d="m14.5 5-7 7 7 7" />
+        </svg>
+      )
     default:
       return null
   }
