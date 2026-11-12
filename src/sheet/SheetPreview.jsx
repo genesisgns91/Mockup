@@ -64,7 +64,10 @@ export default function SheetPreview({ sheet, onPickSlot }) {
           <div
             className="sheet-margin"
             style={{
-              inset: settings.margin * scale,
+              left: settings.marginX * scale,
+              right: settings.marginX * scale,
+              top: settings.marginY * scale,
+              bottom: settings.marginY * scale,
             }}
           />
 

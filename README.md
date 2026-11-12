@@ -19,11 +19,11 @@ O site tem **duas ferramentas** (troca no cabeçalho, ou pelo botão de folha na
 
 ### 2. Gabarito de impressão (sublimação)
 - Folhas **A4 e A3**, orientação automática (a que cabe mais), retrato ou paisagem.
-- **1 a 6 artes** por folha, sempre centralizadas; a tela mostra quantas cabem na medida escolhida
+- **1 a 6 artes** por folha, encostadas no **topo** (para reaproveitar a sobra da folha) e centralizadas na horizontal; a tela mostra quantas cabem na medida escolhida
   (ex.: caneca 210×95 mm → 3 no retrato e 2 na paisagem em A4).
 - Medidas padrão (caneca 325/450 ml, chopp, garrafinha, squeeze) + medida **personalizada**.
   As marcadas "aprox." variam entre fabricantes: ajuste em `src/sheet/presets.js` (`verified`).
-- **Margem de 0 a 10 mm**, espaço entre artes, encaixe (arte inteira ou preenchendo) e giro de 90°.
+- **Margens de 0 a 10 mm**, reguladas separadamente (laterais · topo e base), espaço entre artes, encaixe (arte inteira ou preenchendo) e giro de 90°.
 - **Espelhar** a arte (sublimação), repetir a mesma arte em todos os espaços.
 - Exporta **PDF** (página no tamanho exato da folha) e **PNG** (com o DPI gravado), ambos com
   **fundo transparente** e **300 DPI** (ou 600 DPI). Tudo é gerado no navegador, sem enviar nada a servidores.

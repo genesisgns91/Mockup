@@ -378,7 +378,7 @@ export function ArtsPane({ sheet }) {
       <p className="sheet-result" role="status">
         Cabem <strong>{plan.slots}</strong> {plan.slots === 1 ? 'arte' : 'artes'} nesta folha
         {plan.capacity > plan.slots ? ' (máximo de 6)' : ''}.
-        As artes enviadas ficam centralizadas.
+        As artes enviadas ficam no topo da folha, para você reaproveitar o restante depois.
       </p>
 
       <div className={`art-slots multi sheet-slots cols-${slots > 4 ? 3 : 2}`}>
@@ -520,22 +520,32 @@ export function AdjustPane({ sheet }) {
     <>
 
       <Slider
-        label="Margem de impressão"
-        value={settings.margin}
+        label="Margens laterais"
+        value={settings.marginX}
         min={MARGIN_MIN}
         max={MARGIN_MAX}
         step={0.5}
-        onChange={(margin) => update({ margin })}
-        hint="Distância mínima entre as artes e a borda da folha."
+        onChange={(marginX) => update({ marginX })}
+        hint="Esquerda e direita: distância entre as artes e as bordas laterais da folha."
+      />
+
+      <Slider
+        label="Margens de topo e base"
+        value={settings.marginY}
+        min={MARGIN_MIN}
+        max={MARGIN_MAX}
+        step={0.5}
+        onChange={(marginY) => update({ marginY })}
+        hint="Em cima e embaixo. As artes ficam logo abaixo da margem de topo."
       />
 
       {shrunk && (
         <div className="sheet-warning" role="alert">
           <strong>Atenção: a arte será reduzida</strong>
           <p>
-            Com essa margem a arte não cabe no tamanho real e é reduzida a {Math.round(plan.scale * 100)}%
-            ({Math.round(plan.cw * 10) / 10} × {Math.round(plan.ch * 10) / 10} mm). Diminua a
-            margem para imprimir no tamanho original.
+            Com essas margens a arte não cabe no tamanho real e é reduzida a {Math.round(plan.scale * 100)}%
+            ({Math.round(plan.cw * 10) / 10} × {Math.round(plan.ch * 10) / 10} mm). Diminua as
+            margens para imprimir no tamanho original.
           </p>
         </div>
       )}
@@ -582,7 +592,7 @@ export function AdjustPane({ sheet }) {
 /* ---------- 4 · SALVAR ---------- */
 
 export function SavePane({ sheet }) {
-  const { settings, update, plan, items, busy, progress, exportAs, lowestDpi } = sheet
+  const { settings, update, plan, items, busy, progress, exportAs } = sheet
 
   const wPx = mmToPx(plan.page.w, settings.dpi)
   const hPx = mmToPx(plan.page.h, settings.dpi)
@@ -621,16 +631,6 @@ export function SavePane({ sheet }) {
       <p className="control-hint">
         Folha inteira: {wPx} × {hPx} px. O fundo é sempre <strong>transparente</strong> — só as artes são impressas.
       </p>
-
-      {lowestDpi > 0 && lowestDpi < 300 && (
-        <div className="sheet-warning" role="alert">
-          <strong>Resolução baixa em alguma arte</strong>
-          <p>
-            A menor tem cerca de {Math.round(lowestDpi)} DPI neste tamanho. O arquivo sai em {settings.dpi} DPI,
-            mas a imagem original tem poucos pixels e pode ficar borrada. Use uma imagem maior.
-          </p>
-        </div>
-      )}
 
       <div className="sheet-save-grid">
 
@@ -671,7 +671,8 @@ export function SavePane({ sheet }) {
       <ul className="sheet-summary">
         <li><span>Folha</span><strong>{settings.paper} · {plan.orientation === 'landscape' ? 'paisagem' : 'retrato'}</strong></li>
         <li><span>Artes</span><strong>{items.length}</strong></li>
-        <li><span>Margem · espaço</span><strong>{settings.margin} mm · {settings.gap} mm</strong></li>
+        <li><span>Margens (lat. · topo/base)</span><strong>{settings.marginX} mm · {settings.marginY} mm</strong></li>
+        <li><span>Espaço entre artes</span><strong>{settings.gap} mm</strong></li>
         <li><span>Espelhado</span><strong>{settings.mirror ? 'Sim' : 'Não'}</strong></li>
       </ul>
 

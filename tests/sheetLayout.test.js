@@ -38,7 +38,7 @@ describe('gabarito: cálculo da folha', () => {
   })
 
   it('margem de 10 mm reduz a arte (aviso) mas ainda cabem 3 no retrato', () => {
-    const plan = planSheet({ paper: 'A4', orientation: 'portrait', margin: 10, ...mug })
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', marginX: 10, marginY: 10, ...mug })
 
     expect(plan.fullSize).toBe(false)
     expect(plan.scale).toBeCloseTo(190 / 210, 5)
@@ -68,34 +68,57 @@ describe('gabarito: cálculo da folha', () => {
 })
 
 describe('gabarito: posições', () => {
-  it('uma arte fica centralizada na folha', () => {
+  it('uma arte fica encostada no TOPO e centralizada na horizontal', () => {
     const plan = planSheet({ paper: 'A4', orientation: 'portrait', ...mug })
     const [item] = placeArts(plan, 0, 1)
 
+    expect(item.y).toBeCloseTo(0)
     expect(item.x + item.w / 2).toBeCloseTo(105)
-    expect(item.y + item.h / 2).toBeCloseTo(148.5)
   })
 
-  it('três artes empilhadas ficam centralizadas como conjunto', () => {
+  it('duas artes ficam juntas no topo, deixando a parte de baixo livre', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', ...mug })
+    const items = placeArts(plan, 0, 2)
+
+    expect(items).toHaveLength(2)
+    expect(items[0].y).toBeCloseTo(0)
+    expect(items[1].y).toBeCloseTo(95)
+
+    // sobra uma faixa livre de 297 - 190 = 107 mm embaixo (cabe outra arte de 95 mm)
+    const free = 297 - (items[1].y + items[1].h)
+
+    expect(free).toBeCloseTo(107)
+    expect(free).toBeGreaterThanOrEqual(95)
+  })
+
+  it('a margem de topo define onde começam as artes', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', marginY: 8, ...mug })
+    const [item] = placeArts(plan, 0, 1)
+
+    expect(item.y).toBeCloseTo(8)
+  })
+
+  it('três artes ocupam a folha toda a partir do topo', () => {
     const plan = planSheet({ paper: 'A4', orientation: 'portrait', ...mug })
     const items = placeArts(plan, 0, 3)
 
     expect(items).toHaveLength(3)
-    expect(items[0].y).toBeCloseTo((297 - 285) / 2)
-    expect(items[2].y + items[2].h).toBeCloseTo(297 - (297 - 285) / 2)
+    expect(items[0].y).toBeCloseTo(0)
+    expect(items[2].y + items[2].h).toBeCloseTo(285)
   })
 
   it('nenhuma arte invade as margens nem se sobrepõe', () => {
-    const margin = 8
+    const marginX = 8
+    const marginY = 5
     const gap = 3
-    const plan = planSheet({ paper: 'A3', orientation: 'auto', margin, gap, artW: 90, artH: 60 })
+    const plan = planSheet({ paper: 'A3', orientation: 'auto', marginX, marginY, gap, artW: 90, artH: 60 })
     const items = placeArts(plan, gap, plan.slots)
 
     for (const a of items) {
-      expect(a.x).toBeGreaterThanOrEqual(margin - 1e-6)
-      expect(a.y).toBeGreaterThanOrEqual(margin - 1e-6)
-      expect(a.x + a.w).toBeLessThanOrEqual(plan.page.w - margin + 1e-6)
-      expect(a.y + a.h).toBeLessThanOrEqual(plan.page.h - margin + 1e-6)
+      expect(a.x).toBeGreaterThanOrEqual(marginX - 1e-6)
+      expect(a.y).toBeGreaterThanOrEqual(marginY - 1e-6)
+      expect(a.x + a.w).toBeLessThanOrEqual(plan.page.w - marginX + 1e-6)
+      expect(a.y + a.h).toBeLessThanOrEqual(plan.page.h - marginY + 1e-6)
     }
 
     for (let i = 0; i < items.length; i += 1) {
@@ -111,7 +134,7 @@ describe('gabarito: posições', () => {
     }
   })
 
-  it('última linha incompleta também é centralizada', () => {
+  it('última linha incompleta é centralizada na horizontal', () => {
     const plan = planSheet({ paper: 'A4', orientation: 'portrait', artW: 90, artH: 60 })
     const items = placeArts(plan, 0, 3)
 
@@ -121,6 +144,29 @@ describe('gabarito: posições', () => {
     const right = Math.max(...row.map((i) => i.x + i.w))
 
     expect(left + right).toBeCloseTo(210)
+  })
+})
+
+describe('gabarito: margens separadas', () => {
+  it('margens laterais e de topo/base atuam de forma independente', () => {
+    // só laterais de 10 mm: a largura útil cai para 190 mm → a arte de 210 é reduzida
+    const sides = planSheet({ paper: 'A4', orientation: 'portrait', marginX: 10, marginY: 0, ...mug })
+
+    expect(sides.fullSize).toBe(false)
+    expect(sides.scale).toBeCloseTo(190 / 210, 5)
+
+    // só topo/base de 10 mm: a largura continua 210 → tamanho real, mas cabem só 2 de altura 95 (277 mm úteis, 3×95 = 285)
+    const vertical = planSheet({ paper: 'A4', orientation: 'portrait', marginX: 0, marginY: 10, gap: 0, ...mug })
+
+    expect(vertical.fullSize).toBe(true)
+    expect(vertical.capacity).toBe(2)
+  })
+
+  it('o atalho "margin" aplica o mesmo valor nos dois eixos', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', margin: 6, ...mug })
+
+    expect(plan.marginX).toBe(6)
+    expect(plan.marginY).toBe(6)
   })
 })
 

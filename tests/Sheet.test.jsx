@@ -121,10 +121,11 @@ describe('Gabarito de impressão (desktop)', () => {
 
     await waitFor(() => expect(document.querySelectorAll('.sheet-art').length).toBe(1))
 
-    // ficou centralizada: a arte é 210×95 no meio de 297 mm
+    // a arte fica encostada no topo da folha (e não no meio)
     const art = document.querySelector('.sheet-art')
 
     expect(art).toBeTruthy()
+    expect(parseFloat(art.style.top)).toBeCloseTo(0)
     expect(screen.getAllByRole('button', { name: /PDF/ })[0].disabled).toBe(false)
 
     // espelhar na aba Salvar
@@ -154,9 +155,10 @@ describe('Gabarito de impressão (desktop)', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Retrato' }))
     fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
 
-    const slider = screen.getByLabelText('Margem de impressão')
+    const slider = screen.getByLabelText('Margens de topo e base')
 
     fireEvent.change(slider, { target: { value: '10' } })
+    fireEvent.change(screen.getByLabelText('Margens laterais'), { target: { value: '10' } })
 
     expect(await screen.findByText(/a arte será reduzida/)).toBeTruthy()
     expect(screen.getAllByText(/Reduzida a 90%/).length).toBeGreaterThan(0)
@@ -166,22 +168,32 @@ describe('Gabarito de impressão (desktop)', () => {
     await openSheet()
 
     fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
-    fireEvent.change(screen.getByLabelText('Margem de impressão'), { target: { value: '10' } })
+    fireEvent.change(screen.getByLabelText('Margens laterais'), { target: { value: '10' } })
     fireEvent.click(screen.getByRole('tab', { name: /Medida/ }))
 
     expect(result().textContent).toMatch(/paisagem/)
     expect(screen.getByRole('note').textContent).toMatch(/retrato.*caberiam\s*3\s*artes.*90%/)
   })
 
-  it('a margem fica limitada a 0–10 mm', async () => {
+  it('há duas regulagens de margem, ambas limitadas a 0–10 mm', async () => {
     await openSheet()
 
     fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
 
-    const slider = screen.getByLabelText('Margem de impressão')
+    for (const label of ['Margens laterais', 'Margens de topo e base']) {
+      const slider = screen.getByLabelText(label)
 
-    expect(slider.getAttribute('min')).toBe('0')
-    expect(slider.getAttribute('max')).toBe('10')
+      expect(slider.getAttribute('min')).toBe('0')
+      expect(slider.getAttribute('max')).toBe('10')
+    }
+  })
+
+  it('não mostra aviso de resolução baixa na aba Salvar', async () => {
+    await openSheet()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Salvar/ }))
+
+    expect(screen.queryByText(/Resolução baixa em alguma arte/)).toBeNull()
   })
 })
 

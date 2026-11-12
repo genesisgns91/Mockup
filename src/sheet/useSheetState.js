@@ -35,7 +35,8 @@ export const SHEET_DEFAULTS = {
   orientation: 'auto', // auto | portrait | landscape
   presetId: DEFAULT_PRESET_ID,
   custom: { w: 210, h: 95 },
-  margin: 0,
+  marginX: 0, // margens laterais
+  marginY: 0, // margens de topo e base
   gap: 2,
   fit: 'contain', // contain (arte inteira) | cover (preenche e corta)
   allowRotate: false,
@@ -67,7 +68,11 @@ function sanitize(raw) {
     h: clampNum(raw.custom?.h, 20, 420, 95),
   }
 
-  s.margin = clampNum(raw.margin, MARGIN_MIN, MARGIN_MAX, 0)
+  // versões antigas guardavam uma margem única: vale para os dois
+  const legacy = clampNum(raw.margin, MARGIN_MIN, MARGIN_MAX, 0)
+
+  s.marginX = clampNum(raw.marginX ?? legacy, MARGIN_MIN, MARGIN_MAX, 0)
+  s.marginY = clampNum(raw.marginY ?? legacy, MARGIN_MIN, MARGIN_MAX, 0)
   s.gap = clampNum(raw.gap, 0, GAP_MAX, 2)
   s.fit = raw.fit === 'cover' ? 'cover' : 'contain'
   s.allowRotate = Boolean(raw.allowRotate)
@@ -118,11 +123,12 @@ export function useSheetState() {
         orientation: settings.orientation,
         artW: artSize.w,
         artH: artSize.h,
-        margin: settings.margin,
+        marginX: settings.marginX,
+        marginY: settings.marginY,
         gap: settings.gap,
         allowRotate: settings.allowRotate,
       }),
-    [settings.paper, settings.orientation, artSize, settings.margin, settings.gap, settings.allowRotate]
+    [settings.paper, settings.orientation, artSize, settings.marginX, settings.marginY, settings.gap, settings.allowRotate]
   )
 
   const slots = plan.slots
@@ -139,13 +145,14 @@ export function useSheetState() {
       orientation: plan.orientation === 'portrait' ? 'landscape' : 'portrait',
       artW: artSize.w,
       artH: artSize.h,
-      margin: settings.margin,
+      marginX: settings.marginX,
+      marginY: settings.marginY,
       gap: settings.gap,
       allowRotate: settings.allowRotate,
     })
 
     return !other.invalid && !other.fullSize && other.capacity > plan.capacity ? other : null
-  }, [settings.paper, settings.orientation, settings.margin, settings.gap, settings.allowRotate, artSize, plan])
+  }, [settings.paper, settings.orientation, settings.marginX, settings.marginY, settings.gap, settings.allowRotate, artSize, plan])
 
   const items = useMemo(() => {
     const visible = arts.slice(0, slots)

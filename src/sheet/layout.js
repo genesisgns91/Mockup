@@ -23,14 +23,14 @@ function paperDims(paperId, orientation) {
     : { w: short, h: long }
 }
 
-function evaluate(paperId, orientation, rotated, art, margin, gap) {
+function evaluate(paperId, orientation, rotated, art, marginX, marginY, gap) {
   const page = paperDims(paperId, orientation)
 
   const baseW = rotated ? art.h : art.w
   const baseH = rotated ? art.w : art.h
 
-  const availW = page.w - 2 * margin
-  const availH = page.h - 2 * margin
+  const availW = page.w - 2 * marginX
+  const availH = page.h - 2 * marginY
 
   if (availW <= 0 || availH <= 0 || baseW <= 0 || baseH <= 0) return null
 
@@ -46,6 +46,8 @@ function evaluate(paperId, orientation, rotated, art, margin, gap) {
     page,
     orientation,
     rotated,
+    marginX,
+    marginY,
     scale,
     cw,
     ch,
@@ -81,7 +83,9 @@ export function planSheet({
   orientation = 'auto',
   artW,
   artH,
-  margin = 0,
+  margin = 0, // atalho: mesma margem em todos os lados
+  marginX = margin, // margens laterais (esquerda e direita)
+  marginY = margin, // margens de topo e base
   gap = 0,
   allowRotate = false,
 }) {
@@ -94,7 +98,7 @@ export function planSheet({
 
   for (const o of orientations) {
     for (const r of rotations) {
-      const candidate = evaluate(paper, o, r, art, margin, gap)
+      const candidate = evaluate(paper, o, r, art, marginX, marginY, gap)
 
       if (candidate && better(candidate, best)) best = candidate
     }
@@ -107,6 +111,8 @@ export function planSheet({
       page,
       orientation: 'portrait',
       rotated: false,
+      marginX,
+      marginY,
       scale: 1,
       cw: 0,
       ch: 0,
@@ -148,8 +154,11 @@ function pickColumns(count, cols, rows) {
 
 /*
   Posições (em mm, origem no canto superior esquerdo da folha) das
-  primeiras `count` artes: o conjunto fica centralizado na folha e
-  a última linha, se incompleta, também é centralizada.
+  primeiras `count` artes.
+
+  As artes ficam encostadas no TOPO (logo abaixo da margem de topo),
+  para sobrar uma faixa inteira de folha que pode ser reaproveitada
+  em outra impressão. Na horizontal cada linha é centralizada.
 */
 export function placeArts(plan, gap, count) {
   const n = Math.max(0, Math.min(count, plan.slots))
@@ -159,8 +168,7 @@ export function placeArts(plan, gap, count) {
   const cu = pickColumns(n, plan.cols, plan.rows)
   const rowsUsed = Math.ceil(n / cu)
 
-  const blockH = rowsUsed * plan.ch + (rowsUsed - 1) * gap
-  const y0 = (plan.page.h - blockH) / 2
+  const y0 = plan.marginY
 
   const items = []
 

@@ -49,16 +49,21 @@ describe('exportação do gabarito (ponta a ponta)', () => {
 
     const px = (x, y) => [...ctx.getImageData(x, y, 1, 1).data]
 
-    // cantos fora das artes = transparentes
-    expect(px(5, 5)[3]).toBe(0)
+    // a arte começa no canto superior (topo da folha); a parte de baixo fica transparente
+    expect(px(5, 5)[3]).toBe(255)
+    expect(px(5, 3500)[3]).toBe(0)
     expect(px(2470, 3500)[3]).toBe(0)
 
-    // 2 artes de 95 mm centralizadas: topo em (297 - 190) / 2 = 53,5 mm → ~632 px
-    const top = Math.round((53.5 / 25.4) * 300)
+    // 2 artes de 95 mm encostadas no topo da folha (y = 0)
+    const top = 0
 
     expect(px(200, top + 50)).toEqual([255, 0, 0, 255]) // metade esquerda vermelha
     expect(px(2300, top + 50)).toEqual([0, 0, 255, 255]) // metade direita azul
-    expect(px(200, top - 20)[3]).toBe(0) // acima da arte: transparente
+    // a parte de baixo da folha (depois das 2 artes de 95 mm) fica livre e transparente
+    const belowArts = Math.round((200 / 25.4) * 300)
+
+    expect(px(1200, belowArts)[3]).toBe(0)
+    expect(px(1200, 3400)[3]).toBe(0)
   })
 
   it('PNG espelhado: as metades trocam de lado', async () => {
@@ -72,7 +77,7 @@ describe('exportação do gabarito (ponta a ponta)', () => {
 
     ctx.drawImage(decoded, 0, 0)
 
-    const top = Math.round((53.5 / 25.4) * 300)
+    const top = 0
     const px = (x, y) => [...ctx.getImageData(x, y, 1, 1).data]
 
     expect(px(200, top + 50)).toEqual([0, 0, 255, 255]) // agora a esquerda é azul
