@@ -10,5 +10,10 @@ export default defineConfig(({ command }) => ({
     globals: true,
     setupFiles: ['./tests/setup.js'],
     include: ['tests/**/*.test.{js,jsx}'],
+    server: {
+      deps: {
+        inline: ['undici'],
+      },
+    },
   },
 }))
