@@ -10,6 +10,17 @@ class ResizeObserverStub {
 if (typeof window !== 'undefined') globalThis.ResizeObserver = globalThis.ResizeObserver || ResizeObserverStub
 
 if (typeof window !== 'undefined') {
+// o jsdom não traz PointerEvent: criamos um com os campos que o editor usa
+if (typeof window.PointerEvent === 'undefined') {
+  window.PointerEvent = class PointerEvent extends MouseEvent {
+    constructor(type, init = {}) {
+      super(type, init)
+      this.pointerId = init.pointerId ?? 1
+      this.pointerType = init.pointerType ?? 'mouse'
+    }
+  }
+}
+
 window.matchMedia =
   window.matchMedia ||
   ((query) => ({

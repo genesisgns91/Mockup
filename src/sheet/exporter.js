@@ -19,15 +19,18 @@ function bakeAll(items, dpi, { mirror, fit }) {
 
     return {
       ...item,
-      px: mmToPx(item.x, dpi),
-      py: mmToPx(item.y, dpi),
+      // posição em pixels (pode ser negativa: objeto que sai da folha)
+      px: Math.round((item.x / 25.4) * dpi),
+      py: Math.round((item.y / 25.4) * dpi),
       pw: w,
       ph: h,
-      canvas: bakeArt(item.art.img, w, h, {
-        rotated: item.rotated,
-        mirror,
-        fit,
-      }),
+      canvas: item.bake
+        ? item.bake(w, h, dpi)
+        : bakeArt(item.art.img, w, h, {
+            rotated: item.rotated,
+            mirror,
+            fit,
+          }),
     }
   })
 }

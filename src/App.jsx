@@ -7,6 +7,7 @@ import MobileShell from './components/MobileShell.jsx'
 import SiteHeader from './components/SiteHeader.jsx'
 import SheetStudio from './sheet/SheetStudio.jsx'
 import { useSheetState } from './sheet/useSheetState.js'
+import { useDtfState } from './dtf/useDtfState.js'
 import {
   FormatSwitch,
   ViewSizeSwitch,
@@ -473,6 +474,10 @@ const [videoEffect, setVideoEffect] =
     }
   }, [section])
 
+  const sectionRef = useRef(section)
+
+  sectionRef.current = section
+
   useEffect(() => {
     const onHash = () => {
       if (window.location.hash === '#gabarito') setSection('sheet')
@@ -485,6 +490,24 @@ const [videoEffect, setVideoEffect] =
   }, [])
 
   const sheet = useSheetState()
+  const dtf = useDtfState()
+
+  // tipo de gabarito aberto: "sublimation" (por medida) ou "dtf" (folha livre)
+  const [sheetMode, setSheetMode] = useState(() => {
+    try {
+      return localStorage.getItem('almatie-mockup:sheet-mode') === 'dtf' ? 'dtf' : 'sublimation'
+    } catch {
+      return 'sublimation'
+    }
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('almatie-mockup:sheet-mode', sheetMode)
+    } catch {
+      // armazenamento indisponível
+    }
+  }, [sheetMode])
 
   useEffect(() => {
     try {
@@ -738,6 +761,8 @@ const [videoEffect, setVideoEffect] =
   // Ctrl+V com uma imagem na área de transferência
   useEffect(() => {
     const onPaste = (e) => {
+      if (sectionRef.current === 'sheet') return
+
       const tag = e.target?.tagName
 
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
@@ -925,6 +950,8 @@ const [videoEffect, setVideoEffect] =
 
   useEffect(() => {
     const onKey = (e) => {
+      if (sectionRef.current === 'sheet') return
+
       const tag = e.target?.tagName
 
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
@@ -1309,6 +1336,9 @@ const [videoEffect, setVideoEffect] =
     return (
       <SheetStudio
         sheet={sheet}
+        dtf={dtf}
+        mode={sheetMode}
+        onMode={setSheetMode}
         isMobile={isMobile}
         onSection={setSection}
       />

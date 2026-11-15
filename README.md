@@ -28,6 +28,16 @@ O site tem **duas ferramentas** (troca no cabeçalho, ou pelo botão de folha na
 - Exporta **PDF** (página no tamanho exato da folha) e **PNG** (com o DPI gravado), ambos com
   **fundo transparente** e **300 DPI** (ou 600 DPI). Tudo é gerado no navegador, sem enviar nada a servidores.
 
+**Gabarito DTF (folha livre)** — botão "DTF" no topo do gabarito:
+- Insira quantas imagens quiser (várias de uma vez, arrastando ou colando); elas se distribuem sozinhas pela folha A4/A3.
+- Editor no estilo CorelDRAW: clicar seleciona (respeita as partes transparentes), arrastar move, alças redimensionam
+  (cantos mantêm a proporção; Shift = livre), alça de cima gira (Shift = 15° em 15°), guias inteligentes, seleção múltipla,
+  trazer para frente/trás, alinhar à folha, duplicar, excluir, zoom e deslocamento (no celular: pinça com dois dedos).
+- Atalhos: setas (Shift = 10 mm, Alt = 0,1 mm), Delete, Ctrl+D, Ctrl+A, Ctrl+Z / Ctrl+Shift+Z, `[` e `]`, Ctrl + roda = zoom.
+- **Avisos:** sobreposição de imagens (conta só o que é visível, ignorando o fundo transparente), imagem fora da folha e
+  **qualidade muito baixa** (< 150 DPI no tamanho atual).
+- Exporta PDF/PNG com fundo transparente, 300 ou 600 DPI, com opção de espelhar a folha inteira.
+
 ## Como rodar
 
 ```bash
@@ -53,6 +63,8 @@ src/
   config/                  models.js (catálogo), exportFormats.js, links.js
   sheet/                   gabarito de impressão: presets, layout (cálculo), pdf, png,
                            bake/exporter (exportação), SheetStudio/Panes/Preview (telas)
+  dtf/                     gabarito DTF: geometry/packing/overlap (lógica pura e testada),
+                           DtfEditor (folha interativa), DtfPanels, DtfStudio, useDtfState
   hooks/                   useIsMobile, useHistory (desfazer/refazer)
   utils/                   exportLayout (encaixe de imagem), imageFiles, persistence
   components/

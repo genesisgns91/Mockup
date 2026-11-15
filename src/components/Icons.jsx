@@ -196,6 +196,164 @@ export function Icon({ name, size = 22 }) {
           <path d="m14.5 5-7 7 7 7" />
         </svg>
       )
+    case 'rotate-cw':
+      return (
+        <svg {...common}>
+          <path d="M20 5v5h-5" />
+          <path d="M19.5 10A8 8 0 1 0 20 13" />
+        </svg>
+      )
+    case 'rotate-ccw':
+      return (
+        <svg {...common}>
+          <path d="M4 5v5h5" />
+          <path d="M4.5 10A8 8 0 1 1 4 13" />
+        </svg>
+      )
+    case 'copy':
+      return (
+        <svg {...common}>
+          <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
+          <path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5" />
+        </svg>
+      )
+    case 'to-front':
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="9" width="11" height="11" rx="2" />
+          <path d="M9.5 15V5.5a2 2 0 0 1 2-2H18a2.5 2.5 0 0 1 2.5 2.5v6.5a2 2 0 0 1-2 2H15" />
+        </svg>
+      )
+    case 'to-back':
+      return (
+        <svg {...common}>
+          <rect x="9" y="3.5" width="11" height="11" rx="2" />
+          <path d="M14.5 9H6a2.5 2.5 0 0 0-2.5 2.5V18A2.5 2.5 0 0 0 6 20.5h6.5a2 2 0 0 0 2-2V15" />
+        </svg>
+      )
+    case 'step-up':
+      return (
+        <svg {...common}>
+          <path d="M12 19V6M6.5 11 12 5.5 17.5 11" />
+        </svg>
+      )
+    case 'step-down':
+      return (
+        <svg {...common}>
+          <path d="M12 5v13M6.5 13 12 18.5 17.5 13" />
+        </svg>
+      )
+    case 'minus':
+      return (
+        <svg {...common}>
+          <path d="M5 12h14" />
+        </svg>
+      )
+    case 'fit':
+      return (
+        <svg {...common}>
+          <path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15" />
+        </svg>
+      )
+    case 'lock':
+      return (
+        <svg {...common}>
+          <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+          <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" />
+        </svg>
+      )
+    case 'unlock':
+      return (
+        <svg {...common}>
+          <rect x="5" y="10.5" width="14" height="9.5" rx="2" />
+          <path d="M8 10.5V8a4 4 0 0 1 7.5-1.9" />
+        </svg>
+      )
+    case 'flip-h':
+      return (
+        <svg {...common}>
+          <path d="M12 3.5v17" strokeDasharray="2 3" />
+          <path d="M9 7 4.5 12 9 17V7ZM15 7l4.5 5L15 17V7Z" />
+        </svg>
+      )
+    case 'flip-v':
+      return (
+        <svg {...common}>
+          <path d="M3.5 12h17" strokeDasharray="2 3" />
+          <path d="M7 9 12 4.5 17 9H7ZM7 15l5 4.5 5-4.5H7Z" />
+        </svg>
+      )
+    case 'align-left':
+      return (
+        <svg {...common}>
+          <path d="M4.5 4v16" />
+          <rect x="8" y="6" width="11" height="4.5" rx="1" />
+          <rect x="8" y="13.5" width="7" height="4.5" rx="1" />
+        </svg>
+      )
+    case 'align-center-x':
+      return (
+        <svg {...common}>
+          <path d="M12 4v16" />
+          <rect x="5" y="6" width="14" height="4.5" rx="1" />
+          <rect x="7.5" y="13.5" width="9" height="4.5" rx="1" />
+        </svg>
+      )
+    case 'align-right':
+      return (
+        <svg {...common}>
+          <path d="M19.5 4v16" />
+          <rect x="5" y="6" width="11" height="4.5" rx="1" />
+          <rect x="9" y="13.5" width="7" height="4.5" rx="1" />
+        </svg>
+      )
+    case 'align-top':
+      return (
+        <svg {...common}>
+          <path d="M4 4.5h16" />
+          <rect x="6" y="8" width="4.5" height="11" rx="1" />
+          <rect x="13.5" y="8" width="4.5" height="7" rx="1" />
+        </svg>
+      )
+    case 'align-center-y':
+      return (
+        <svg {...common}>
+          <path d="M4 12h16" />
+          <rect x="6" y="5" width="4.5" height="14" rx="1" />
+          <rect x="13.5" y="7.5" width="4.5" height="9" rx="1" />
+        </svg>
+      )
+    case 'align-bottom':
+      return (
+        <svg {...common}>
+          <path d="M4 19.5h16" />
+          <rect x="6" y="5" width="4.5" height="11" rx="1" />
+          <rect x="13.5" y="9" width="4.5" height="7" rx="1" />
+        </svg>
+      )
+    case 'warning':
+      return (
+        <svg {...common}>
+          <path d="M12 4 2.8 19.5h18.4L12 4Z" />
+          <path d="M12 10v4.5M12 17.2v.1" />
+        </svg>
+      )
+    case 'arrange':
+      return (
+        <svg {...common}>
+          <rect x="4" y="4" width="7" height="7" rx="1.5" />
+          <rect x="13" y="4" width="7" height="7" rx="1.5" />
+          <rect x="4" y="13" width="7" height="7" rx="1.5" />
+          <rect x="13" y="13" width="7" height="7" rx="1.5" />
+        </svg>
+      )
+    case 'move':
+      return (
+        <svg {...common}>
+          <path d="M12 3v18M3 12h18" />
+          <path d="m8.5 6.5 3.5-3.5 3.5 3.5M8.5 17.5l3.5 3.5 3.5-3.5M6.5 8.5 3 12l3.5 3.5M17.5 8.5 21 12l-3.5 3.5" />
+        </svg>
+      )
     default:
       return null
   }

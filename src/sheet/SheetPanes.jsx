@@ -54,7 +54,7 @@ export const SHEET_TABS = [
 
 /* ---------- peças pequenas ---------- */
 
-function Toggle({ checked, onChange, title, hint, icon }) {
+export function Toggle({ checked, onChange, title, hint, icon }) {
   return (
     <label className={`sheet-toggle${checked ? ' on' : ''}`}>
 
@@ -85,7 +85,7 @@ function Toggle({ checked, onChange, title, hint, icon }) {
   )
 }
 
-function Segmented3({ value, options, onChange, label }) {
+export function Segmented3({ value, options, onChange, label }) {
   return (
     <div
       className={`segmented-control ${options.length === 2 ? 'two-col' : 'three-col'}`}
@@ -112,7 +112,7 @@ function Segmented3({ value, options, onChange, label }) {
   Campo numérico que deixa digitar livremente e só "fecha" o valor
   (limitando ao mínimo/máximo) ao sair do campo.
 */
-function MmField({ label, value, min, max, onCommit }) {
+export function MmField({ label, value, min, max, onCommit, unit = 'mm' }) {
   const [text, setText] = useState(String(value))
   const focused = useRef(false)
 
@@ -154,13 +154,13 @@ function MmField({ label, value, min, max, onCommit }) {
           }}
         />
 
-        <em>mm</em>
+        <em>{unit}</em>
       </span>
     </label>
   )
 }
 
-function Slider({ label, value, min, max, step, onChange, hint }) {
+export function Slider({ label, value, min, max, step, onChange, hint }) {
   return (
     <div className="range-field">
 

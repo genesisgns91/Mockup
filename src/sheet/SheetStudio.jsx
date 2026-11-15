@@ -3,6 +3,8 @@ import SiteHeader from '../components/SiteHeader.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { useSheetDrag, vibrate } from '../hooks/useSheetDrag.js'
 import SheetPreview from './SheetPreview.jsx'
+import ModeSwitch from './ModeSwitch.jsx'
+import DtfStudio from '../dtf/DtfStudio.jsx'
 import { AdjustPane, ArtsPane, MeasurePane, SHEET_TABS, SavePane } from './SheetPanes.jsx'
 
 /*
@@ -60,7 +62,7 @@ function QuickSave({ sheet }) {
 
 /* ---------- DESKTOP ---------- */
 
-function DesktopSheet({ sheet, onSection }) {
+function DesktopSheet({ sheet, mode, onMode, onSection }) {
   const [tab, setTab] = useState('measure')
   const [pickSlot, setPickSlot] = useState(null)
 
@@ -219,6 +221,7 @@ function DesktopSheet({ sheet, onSection }) {
             </div>
 
             <div className="stage-tools">
+              <ModeSwitch mode={mode} onMode={onMode} />
               <QuickSave sheet={sheet} />
             </div>
 
@@ -264,7 +267,7 @@ function DesktopSheet({ sheet, onSection }) {
 
 /* ---------- CELULAR ---------- */
 
-function MobileSheet({ sheet, onSection }) {
+function MobileSheet({ sheet, mode, onMode, onSection }) {
   const [tab, setTab] = useState(null)
   const [snap, setSnap] = useState('half')
 
@@ -321,12 +324,7 @@ function MobileSheet({ sheet, onSection }) {
           <Icon name="back" size={20} />
         </button>
 
-        <div className="m-title-pill">
-          <small>Gabarito</small>
-          <strong>
-            {sheet.settings.paper} · {sheet.items.length} {sheet.items.length === 1 ? 'arte' : 'artes'}
-          </strong>
-        </div>
+        <ModeSwitch mode={mode} onMode={onMode} />
 
         <div className="m-topbar-actions">
           <button
@@ -425,8 +423,20 @@ function MobileSheet({ sheet, onSection }) {
 }
 
 
-export default function SheetStudio({ sheet, isMobile, onSection }) {
+export default function SheetStudio({ sheet, dtf, mode = 'sublimation', onMode, isMobile, onSection }) {
+  if (mode === 'dtf') {
+    return (
+      <DtfStudio
+        dtf={dtf}
+        isMobile={isMobile}
+        mode={mode}
+        onMode={onMode}
+        onSection={onSection}
+      />
+    )
+  }
+
   return isMobile
-    ? <MobileSheet sheet={sheet} onSection={onSection} />
-    : <DesktopSheet sheet={sheet} onSection={onSection} />
+    ? <MobileSheet sheet={sheet} mode={mode} onMode={onMode} onSection={onSection} />
+    : <DesktopSheet sheet={sheet} mode={mode} onMode={onMode} onSection={onSection} />
 }
