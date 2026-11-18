@@ -1,4 +1,4 @@
-import { MAX_ARTS, PAPERS } from './presets.js'
+import { MAX_ARTS, PAPERS, SHRINK_TOLERANCE_MM } from './presets.js'
 
 /*
   ==========================================================
@@ -34,13 +34,56 @@ function evaluate(paperId, orientation, rotated, art, marginX, marginY, gap) {
 
   if (availW <= 0 || availH <= 0 || baseW <= 0 || baseH <= 0) return null
 
-  const scale = Math.min(1, availW / baseW, availH / baseH)
+  // menor escala aceita "sem aviso": o lado maior perde no máximo 1 mm
+  const sMin = Math.max(0.5, 1 - SHRINK_TOLERANCE_MM / Math.max(baseW, baseH))
 
-  const cw = baseW * scale
-  const ch = baseH * scale
+  /*
+    Testa todas as grades colunas × linhas: para cada uma, calcula a maior
+    escala (≤ 100%) em que ela cabe. Vale a que tem mais artes cabendo com
+    redução de até 1 mm; em empate, a que reduz menos.
+  */
+  const maxCols = Math.max(1, Math.floor((availW + gap + EPS) / (baseW * sMin + gap)))
+  const maxRows = Math.max(1, Math.floor((availH + gap + EPS) / (baseH * sMin + gap)))
 
-  const cols = Math.max(1, Math.floor((availW + gap + EPS) / (cw + gap)))
-  const rows = Math.max(1, Math.floor((availH + gap + EPS) / (ch + gap)))
+  let best = null
+
+  for (let k = 1; k <= maxCols; k += 1) {
+    for (let r = 1; r <= maxRows; r += 1) {
+      const s = Math.min(
+        1,
+        (availW - (k - 1) * gap) / (k * baseW),
+        (availH - (r - 1) * gap) / (r * baseH)
+      )
+
+      if (s < sMin - EPS) continue
+
+      const cap = k * r
+
+      if (!best || cap > best.cap || (cap === best.cap && s > best.s + EPS)) {
+        best = { k, r, s, cap }
+      }
+    }
+  }
+
+  let scale
+  let cols
+  let rows
+
+  if (best) {
+    scale = best.s
+    cols = best.k
+    rows = best.r
+  } else {
+    // nem uma arte cabe sem reduzir mais de 1 mm: reduz para caber uma
+    // (e conta quantas dessa escala cabem)
+    scale = Math.min(1, availW / baseW, availH / baseH)
+
+    const cw0 = baseW * scale
+    const ch0 = baseH * scale
+
+    cols = Math.max(1, Math.floor((availW + gap + EPS) / (cw0 + gap)))
+    rows = Math.max(1, Math.floor((availH + gap + EPS) / (ch0 + gap)))
+  }
 
   return {
     page,
@@ -49,12 +92,14 @@ function evaluate(paperId, orientation, rotated, art, marginX, marginY, gap) {
     marginX,
     marginY,
     scale,
-    cw,
-    ch,
+    shrinkMM: (1 - scale) * Math.max(baseW, baseH),
+    cw: baseW * scale,
+    ch: baseH * scale,
     cols,
     rows,
     capacity: cols * rows,
-    fullSize: scale >= 1 - EPS,
+    // "tamanho real": sem redução ou só a redução tolerada de até 1 mm
+    fullSize: scale >= sMin - EPS,
   }
 }
 
@@ -65,6 +110,7 @@ function better(a, b) {
 
   if (a.fullSize) {
     if (a.capacity !== b.capacity) return a.capacity > b.capacity
+    if (Math.abs(a.scale - b.scale) > EPS) return a.scale > b.scale
   } else {
     if (Math.abs(a.scale - b.scale) > EPS) return a.scale > b.scale
     if (a.capacity !== b.capacity) return a.capacity > b.capacity
@@ -78,7 +124,7 @@ function better(a, b) {
 /*
   Escolhe a melhor combinação de orientação da folha e giro da arte.
 */
-export function planSheet({
+function planCore({
   paper = 'A4',
   orientation = 'auto',
   artW,
@@ -202,10 +248,92 @@ export function effectiveDpi(imgW, imgH, cellW, cellH, rotated, fit) {
   const frameW = rotated ? cellH : cellW
   const frameH = rotated ? cellW : cellH
 
-  const mmPerPx =
-    fit === 'cover'
-      ? Math.max(frameW / imgW, frameH / imgH)
-      : Math.min(frameW / imgW, frameH / imgH)
+  // milímetros por pixel em cada eixo
+  const mmX = frameW / imgW
+  const mmY = frameH / imgH
+
+  let mmPerPx
+
+  if (fit === 'stretch') mmPerPx = Math.max(mmX, mmY) // o eixo mais "esticado" limita a resolução
+  else if (fit === 'cover') mmPerPx = Math.max(mmX, mmY)
+  else mmPerPx = Math.min(mmX, mmY)
 
   return 25.4 / mmPerPx
+}
+
+/*
+  Diferença entre a proporção da arte e a da medida (0 = igual,
+  0,07 = 7%). Serve para avisar que a arte vai sobrar, cortar ou esticar.
+*/
+export function aspectMismatch(imgW, imgH, cellW, cellH, rotated) {
+  if (!imgW || !imgH || !cellW || !cellH) return 0
+
+  const frameW = rotated ? cellH : cellW
+  const frameH = rotated ? cellW : cellH
+
+  return Math.abs(imgW / imgH / (frameW / frameH) - 1)
+}
+
+
+/*
+  ==========================================================
+  PLANO FINAL: o arranjo é decidido SEM margens e as margens apenas
+  "encolhem" as artes.
+
+  Assim, ao aumentar a margem, o arranjo não muda (nada troca de
+  orientação nem de posição): as artes ficam proporcionalmente menores
+  para caber dentro da área útil. Com margem 0 a arte encosta nas
+  bordas. Só se a redução passar de 10% o arranjo é recalculado.
+  ==========================================================
+*/
+export const MARGIN_FIT_FLOOR = 0.9
+
+export function planSheet(params) {
+  const {
+    margin = 0,
+    marginX = margin,
+    marginY = margin,
+    gap = 0,
+  } = params
+
+  const ideal = planCore({ ...params, margin: 0, marginX: 0, marginY: 0 })
+
+  if (ideal.invalid || (marginX <= 0 && marginY <= 0)) {
+    return planCore({ ...params, marginX, marginY })
+  }
+
+  // mesmo arranjo (orientação, giro, colunas × linhas), com a escala das margens
+  const baseW = ideal.rotated ? params.artH : params.artW
+  const baseH = ideal.rotated ? params.artW : params.artH
+
+  const availW = ideal.page.w - 2 * marginX
+  const availH = ideal.page.h - 2 * marginY
+
+  if (availW > 0 && availH > 0) {
+    const scale = Math.min(
+      1,
+      (availW - (ideal.cols - 1) * gap) / (ideal.cols * baseW),
+      (availH - (ideal.rows - 1) * gap) / (ideal.rows * baseH)
+    )
+
+    if (scale >= MARGIN_FIT_FLOOR) {
+      const sMin = Math.max(0.5, 1 - SHRINK_TOLERANCE_MM / Math.max(baseW, baseH))
+
+      return {
+        ...ideal,
+        marginX,
+        marginY,
+        scale,
+        shrinkMM: (1 - scale) * Math.max(baseW, baseH),
+        cw: baseW * scale,
+        ch: baseH * scale,
+        fullSize: scale >= sMin - EPS,
+        slots: Math.min(MAX_ARTS, ideal.capacity),
+        invalid: false,
+      }
+    }
+  }
+
+  // redução maior que 10%: recalcula o melhor arranjo para essas margens
+  return planCore({ ...params, marginX, marginY })
 }

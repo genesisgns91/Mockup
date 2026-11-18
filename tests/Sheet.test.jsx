@@ -86,7 +86,7 @@ describe('Gabarito de impressão (desktop)', () => {
     await openSheet()
 
     fireEvent.click(screen.getByRole('radio', { name: 'Paisagem' }))
-    expect(result().textContent).toMatch(/paisagem.*cabem\s*2\s*artes/)
+    expect(result().textContent).toMatch(/paisagem.*cabem\s*3\s*artes/) // girando as artes (padrão), cabem 3 em A4 paisagem
 
     fireEvent.click(screen.getByRole('button', { name: /A3/ }))
     fireEvent.click(screen.getByRole('radio', { name: 'Automática' }))
@@ -125,7 +125,8 @@ describe('Gabarito de impressão (desktop)', () => {
     const art = document.querySelector('.sheet-art')
 
     expect(art).toBeTruthy()
-    expect(parseFloat(art.style.top)).toBeCloseTo(0)
+    expect(parseFloat(art.style.top)).toBeGreaterThan(0) // logo abaixo da margem de topo (3 mm)
+    expect(parseFloat(art.style.top)).toBeLessThan(20)
     expect(screen.getAllByRole('button', { name: /PDF/ })[0].disabled).toBe(false)
 
     // espelhar na aba Salvar
@@ -149,30 +150,44 @@ describe('Gabarito de impressão (desktop)', () => {
     await waitFor(() => expect(document.querySelectorAll('.sheet-art').length).toBe(3))
   })
 
-  it('a margem acima do que cabe reduz a arte e avisa', async () => {
+  it('aumentar a margem REDUZ a arte (em vez de mudar a posição ou a orientação)', async () => {
     await openSheet()
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Retrato' }))
+    const before = { left: parseFloat(document.querySelector('.sheet-art')?.style.left || '0') }
+
     fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
 
-    const slider = screen.getByLabelText('Margens de topo e base')
-
-    fireEvent.change(slider, { target: { value: '10' } })
     fireEvent.change(screen.getByLabelText('Margens laterais'), { target: { value: '10' } })
+    fireEvent.change(screen.getByLabelText('Margens de topo e base'), { target: { value: '10' } })
 
-    expect(await screen.findByText(/a arte será reduzida/)).toBeTruthy()
-    expect(screen.getAllByText(/Reduzida a 90%/).length).toBeGreaterThan(0)
+    expect(await screen.findByText(/A arte foi ajustada às margens/)).toBeTruthy()
+    expect(document.querySelector('.sheet-chip.accent').textContent).toMatch(/Arte ajustada: 90%/)
+
+    // a orientação continua retrato (o arranjo não muda)
+    fireEvent.click(screen.getByRole('tab', { name: /Medida/ }))
+    expect(result().textContent).toMatch(/retrato/)
+    expect(before).toBeTruthy()
   })
 
-  it('no automático com margem alta prioriza o tamanho real e avisa da alternativa', async () => {
+  it('o padrão é 3 mm de margem em cada lado: a arte já aparece ajustada (97%)', async () => {
     await openSheet()
 
     fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
-    fireEvent.change(screen.getByLabelText('Margens laterais'), { target: { value: '10' } })
-    fireEvent.click(screen.getByRole('tab', { name: /Medida/ }))
 
-    expect(result().textContent).toMatch(/paisagem/)
-    expect(screen.getByRole('note').textContent).toMatch(/retrato.*caberiam\s*3\s*artes.*90%/)
+    expect(screen.getByLabelText('Margens laterais').value).toBe('3')
+    expect(screen.getByLabelText('Margens de topo e base').value).toBe('3')
+    expect(document.querySelector('.sheet-chip.accent').textContent).toMatch(/Arte ajustada: 97%/)
+  })
+
+  it('com margem 0 a arte encosta nas bordas e fica no tamanho original', async () => {
+    await openSheet()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
+    fireEvent.change(screen.getByLabelText('Margens laterais'), { target: { value: '0' } })
+    fireEvent.change(screen.getByLabelText('Margens de topo e base'), { target: { value: '0' } })
+
+    expect(document.querySelector('.sheet-chip.accent')).toBeNull()
+    expect(document.querySelector('.sheet-margin').style.left).toBe('0px')
   })
 
   it('há duas regulagens de margem, ambas limitadas a 0–10 mm', async () => {
@@ -232,5 +247,73 @@ describe('Gabarito de impressão (celular)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Voltar ao mockup 3D' }))
 
     expect(await screen.findByRole('navigation', { name: /Seções do editor/ })).toBeTruthy()
+  })
+})
+
+
+describe('Gabarito de impressão: aproveitamento e encaixe', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    window.location.hash = ''
+  })
+
+  async function openSheet() {
+    mount()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Gabarito de impressão' }))
+    await screen.findByText('Monte a folha')
+  }
+
+  it('A3 em paisagem mostra 6 artes de 210×95', async () => {
+    await openSheet()
+
+    fireEvent.click(screen.getByRole('button', { name: /A3/ }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Paisagem' }))
+
+    expect(result().textContent).toMatch(/paisagem.*cabem\s*6\s*artes de 210 × 95 mm/)
+  })
+
+  it('o encaixe padrão é "Preencher" (arte encosta nas bordas) e existe "Esticar"', async () => {
+    await openSheet()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
+
+    expect(screen.getByRole('radio', { name: 'Preencher' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByRole('radio', { name: 'Esticar' })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: 'Inteira' })).toBeTruthy()
+  })
+
+  it('o espaço entre as artes começa em 1 mm', async () => {
+    await openSheet()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
+
+    expect(screen.getByLabelText('Espaço entre as artes').value).toBe('1')
+  })
+
+  it('configurações antigas (gap 2, encaixe "inteira") são atualizadas para os novos padrões', async () => {
+    localStorage.setItem('almatie-mockup:sheet:v1', JSON.stringify({ paper: 'A3', gap: 2, fit: 'contain', allowRotate: false }))
+
+    await openSheet()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
+
+    expect(screen.getByLabelText('Espaço entre as artes').value).toBe('1')
+    expect(screen.getByRole('radio', { name: 'Preencher' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByLabelText('Margens laterais').value).toBe('3')
+  })
+
+  it('mudar uma configuração não volta as outras para o padrão', async () => {
+    await openSheet()
+
+    fireEvent.click(screen.getByRole('tab', { name: /Ajustes/ }))
+
+    fireEvent.change(screen.getByLabelText('Espaço entre as artes'), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('radio', { name: 'Esticar' }))
+    fireEvent.change(screen.getByLabelText('Margens laterais'), { target: { value: '2' } })
+
+    expect(screen.getByLabelText('Espaço entre as artes').value).toBe('3')
+    expect(screen.getByRole('radio', { name: 'Esticar' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByLabelText(/Girar as artes 90°/).checked).toBe(true)
   })
 })

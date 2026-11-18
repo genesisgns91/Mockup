@@ -11,7 +11,7 @@ import { placeArts } from './layout.js'
   ==========================================================
 */
 export default function SheetPreview({ sheet, onPickSlot }) {
-  const { plan, items, settings, artSize, slots } = sheet
+  const { plan, items, settings, artSize, slots, aspect } = sheet
 
   const areaRef = useRef(null)
   const [box, setBox] = useState({ w: 0, h: 0 })
@@ -46,7 +46,6 @@ export default function SheetPreview({ sheet, onPickSlot }) {
       : 0
 
   const ghosts = !items.length ? placeArts(plan, settings.gap, slots) : []
-  const shrunk = !plan.fullSize && !plan.invalid
 
   return (
     <div className="sheet-preview-area" ref={areaRef}>
@@ -119,7 +118,7 @@ export default function SheetPreview({ sheet, onPickSlot }) {
                     src={item.art.url}
                     alt={`Arte ${i + 1}`}
                     draggable={false}
-                    style={{ objectFit: settings.fit === 'cover' ? 'cover' : 'contain' }}
+                    style={{ objectFit: settings.fit === 'cover' ? 'cover' : settings.fit === 'stretch' ? 'fill' : 'contain' }}
                   />
                 </div>
 
@@ -157,9 +156,25 @@ export default function SheetPreview({ sheet, onPickSlot }) {
 
         {settings.mirror && <span className="sheet-chip accent">↔ Espelhado</span>}
 
-        {shrunk && (
-          <span className="sheet-chip warn">
-            Reduzida a {Math.round(plan.scale * 100)}% pela margem
+        {plan.scale < 1 - 1e-6 && !plan.invalid && (
+          <span
+            className={`sheet-chip ${plan.scale < 0.9 - 1e-6 ? 'warn' : 'accent'}`}
+            title="A arte é reduzida para caber dentro das margens e do espaço entre as artes. Com margem 0 ela encosta nas bordas."
+          >
+            Arte ajustada: {Math.round(plan.scale * 100)}% · {plan.cw.toFixed(1).replace('.', ',')} × {plan.ch.toFixed(1).replace('.', ',')} mm
+          </span>
+        )}
+
+        {aspect && (
+          <span
+            className="sheet-chip warn"
+            title="A proporção da arte enviada é diferente da medida escolhida"
+          >
+            {aspect.fit === 'cover'
+              ? `Proporção diferente: cortando ~${Math.round(aspect.pct * 100)}% da arte`
+              : aspect.fit === 'stretch'
+                ? `Proporção diferente: arte esticada ${Math.round(aspect.pct * 100)}%`
+                : 'Proporção diferente: sobra espaço nas bordas'}
           </span>
         )}
 

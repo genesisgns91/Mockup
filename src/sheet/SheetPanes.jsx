@@ -514,8 +514,6 @@ export function ArtsPane({ sheet }) {
 
 export function AdjustPane({ sheet }) {
   const { settings, update, plan } = sheet
-  const shrunk = !plan.fullSize && !plan.invalid
-
   return (
     <>
 
@@ -526,7 +524,7 @@ export function AdjustPane({ sheet }) {
         max={MARGIN_MAX}
         step={0.5}
         onChange={(marginX) => update({ marginX })}
-        hint="Esquerda e direita: distância entre as artes e as bordas laterais da folha."
+        hint="Esquerda e direita. Ao aumentar, a arte diminui para caber dentro da margem; em 0 mm ela encosta na borda."
       />
 
       <Slider
@@ -536,18 +534,24 @@ export function AdjustPane({ sheet }) {
         max={MARGIN_MAX}
         step={0.5}
         onChange={(marginY) => update({ marginY })}
-        hint="Em cima e embaixo. As artes ficam logo abaixo da margem de topo."
+        hint="Em cima e embaixo. As artes ficam logo abaixo da margem de topo; aumentar também reduz a arte."
       />
 
-      {shrunk && (
-        <div className="sheet-warning" role="alert">
-          <strong>Atenção: a arte será reduzida</strong>
-          <p>
-            Com essas margens a arte não cabe no tamanho real e é reduzida a {Math.round(plan.scale * 100)}%
-            ({Math.round(plan.cw * 10) / 10} × {Math.round(plan.ch * 10) / 10} mm). Diminua as
-            margens para imprimir no tamanho original.
+      {plan.scale < 1 - 1e-6 && !plan.invalid && (
+        plan.scale < 0.9 - 1e-6 ? (
+          <div className="sheet-warning" role="alert">
+            <strong>Atenção: a arte foi reduzida bastante</strong>
+            <p>
+              Com essas margens cada arte fica com {Math.round(plan.cw * 10) / 10} × {Math.round(plan.ch * 10) / 10} mm
+              ({Math.round(plan.scale * 100)}% do tamanho original). Diminua as margens para imprimir maior.
+            </p>
+          </div>
+        ) : (
+          <p className="sheet-tip" role="note">
+            A arte foi ajustada às margens: fica com <strong>{Math.round(plan.cw * 10) / 10} × {Math.round(plan.ch * 10) / 10} mm</strong>{' '}
+            ({Math.round(plan.scale * 100)}% do tamanho original). Em 0 mm ela encosta nas bordas e fica no tamanho original.
           </p>
-        </div>
+        )
       )}
 
       <Slider
@@ -557,7 +561,7 @@ export function AdjustPane({ sheet }) {
         max={GAP_MAX}
         step={0.5}
         onChange={(gap) => update({ gap })}
-        hint="Ajuda no recorte. Pode reduzir quantas artes cabem."
+        hint="1 mm separa as artes. Para caber mais, cada arte pode ser reduzida em até 1 mm."
       />
 
       <h4 className="sheet-label">Encaixe da arte</h4>
@@ -567,21 +571,23 @@ export function AdjustPane({ sheet }) {
         value={settings.fit}
         onChange={(fit) => update({ fit })}
         options={[
-          { id: 'contain', label: 'Inteira' },
           { id: 'cover', label: 'Preencher' },
+          { id: 'contain', label: 'Inteira' },
+          { id: 'stretch', label: 'Esticar' },
         ]}
       />
 
       <p className="control-hint">
-        <strong>Inteira</strong> mostra a arte completa (pode sobrar espaço nas laterais).
-        <strong> Preencher</strong> cobre toda a medida e corta o excesso.
+        <strong>Preencher</strong> cobre toda a medida (encosta nas bordas) e corta o excesso.
+        <strong> Inteira</strong> mostra a arte completa e pode sobrar espaço nas laterais.
+        <strong> Esticar</strong> ocupa a medida toda sem cortar, deformando um pouco se a proporção for diferente.
       </p>
 
       <Toggle
         checked={settings.allowRotate}
         onChange={(allowRotate) => update({ allowRotate })}
-        title="Girar as artes 90° para caber mais"
-        hint="Só gira se isso aumentar a quantidade por folha"
+        title="Girar as artes 90° quando couber mais"
+        hint="Recomendado: só gira se aumentar a quantidade por folha"
       />
 
     </>

@@ -570,6 +570,7 @@ export default function DtfEditor({ dtf, compact = false, onAdd }) {
   }, [dtf.lowQuality, dtf.overlaps, dtf.outside])
 
   const percent = Math.round((S / REAL_SCALE) * 100)
+  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
 
   const toolbarBox = group || (single ? aabb(single) : null)
 
@@ -589,41 +590,69 @@ export default function DtfEditor({ dtf, compact = false, onAdd }) {
       onDrop={onDrop}
     >
 
-      {/* folha (em milímetros) */}
-      <div
-        className="dtf-world"
-        style={{
-          width: page.w,
-          height: page.h,
-          transform: `translate(${ox}px, ${oy}px) scale(${S})`,
-        }}
-      >
+      {/*
+        Folha e imagens desenhadas direto em PIXELS DE TELA (nada de ampliar
+        por CSS): assim cada imagem é reduzida pelo navegador a partir do
+        arquivo original, em vez de ser ampliada de uma versão pequena.
+      */}
+      <div className="dtf-world">
 
-        <div className="dtf-page" />
+        <div
+          className="dtf-page"
+          style={{
+            left: ox,
+            top: oy,
+            width: page.w * S,
+            height: page.h * S,
+            backgroundSize: `${10 * S}px ${10 * S}px`,
+          }}
+        />
 
         {settings.margin > 0 && (
           <div
             className="dtf-page-margin"
-            style={{ inset: settings.margin }}
+            style={{
+              left: ox + settings.margin * S,
+              top: oy + settings.margin * S,
+              width: (page.w - 2 * settings.margin) * S,
+              height: (page.h - 2 * settings.margin) * S,
+            }}
           />
         )}
 
-        {objects.map((o) => (
-          <div
-            key={o.id}
-            className="dtf-obj"
-            data-obj={o.id}
-            style={{
-              left: o.cx - o.w / 2,
-              top: o.cy - o.h / 2,
-              width: o.w,
-              height: o.h,
-              transform: `rotate(${o.angle}deg) scale(${o.flipX ? -1 : 1}, ${o.flipY ? -1 : 1})`,
-            }}
-          >
-            <img src={o.url} alt={o.name} draggable={false} />
-          </div>
-        ))}
+        {objects.map((o) => {
+          const plain = o.angle === 0 && !o.flipX && !o.flipY
+
+          // sem giro nem espelho, alinha ao pixel do aparelho (bordas nítidas)
+          const snapPx = (v) => (plain ? Math.round(v * dpr) / dpr : v)
+
+          const preview = dtf.previewOf ? dtf.previewOf(o.id) : null
+          const useOriginal = !preview || o.w * S * dpr > preview.longest * 1.1
+
+          return (
+            <div
+              key={o.id}
+              className="dtf-obj"
+              data-obj={o.id}
+              data-cx={o.cx}
+              data-cy={o.cy}
+              data-w={o.w}
+              data-h={o.h}
+              data-angle={o.angle}
+              style={{
+                left: snapPx(ox + (o.cx - o.w / 2) * S),
+                top: snapPx(oy + (o.cy - o.h / 2) * S),
+                width: snapPx(o.w * S),
+                height: snapPx(o.h * S),
+                transform: plain
+                  ? undefined
+                  : `rotate(${o.angle}deg) scale(${o.flipX ? -1 : 1}, ${o.flipY ? -1 : 1})`,
+              }}
+            >
+              <img src={useOriginal ? o.url : preview.url} alt={o.name} draggable={false} decoding="async" />
+            </div>
+          )
+        })}
 
       </div>
 

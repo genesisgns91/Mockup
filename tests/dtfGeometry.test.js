@@ -201,6 +201,92 @@ describe('distribuição automática', () => {
   })
 })
 
+describe('compactação de várias imagens grandes', () => {
+  const boxesOf = (spots) =>
+    spots.map((s) => {
+      const turned = s.angle === 90
+      const w = turned ? s.h : s.w
+      const h = turned ? s.w : s.h
+
+      return { x: s.cx - w / 2, y: s.cy - h / 2, r: s.cx + w / 2, b: s.cy + h / 2 }
+    })
+
+  const anyOverlap = (boxes) => {
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const a = boxes[i]
+        const b = boxes[j]
+
+        if (a.x < b.r - 1e-6 && b.x < a.r - 1e-6 && a.y < b.b - 1e-6 && b.y < a.b - 1e-6) return true
+      }
+    }
+
+    return false
+  }
+
+  it('várias imagens grandes são reduzidas juntas para caberem sem se sobrepor', () => {
+    const items = Array.from({ length: 6 }, () => ({ w: 180, h: 240 }))
+    const spots = placeNew(items, [], page, { margin: 5, gap: 4 })
+
+    expect(spots.every((s) => !s.overflow)).toBe(true)
+    expect(spots.every((s) => s.scale < 1)).toBe(true)
+
+    const boxes = boxesOf(spots)
+
+    expect(anyOverlap(boxes)).toBe(false)
+
+    for (const b of boxes) {
+      expect(b.x).toBeGreaterThanOrEqual(5 - 1e-6)
+      expect(b.y).toBeGreaterThanOrEqual(5 - 1e-6)
+      expect(b.r).toBeLessThanOrEqual(205 + 1e-6)
+      expect(b.b).toBeLessThanOrEqual(292 + 1e-6)
+    }
+  })
+
+  it('usa a maior escala possível (não encolhe mais do que o necessário)', () => {
+    const items = Array.from({ length: 4 }, () => ({ w: 200, h: 140 }))
+    const spots = placeNew(items, [], page, { margin: 5, gap: 4 })
+
+    // 2 colunas × 2 linhas seria 4 imagens de ~98×... ou 1 coluna: 4 × 140 = 560 > 287 → precisa encolher
+    const s = spots[0].scale
+
+    expect(s).toBeLessThan(1)
+    expect(s).toBeGreaterThan(0.45)
+    // todas na mesma proporção
+    expect(spots.every((sp) => Math.abs(sp.scale - s) < 1e-6)).toBe(true)
+  })
+
+  it('gira uma imagem 90° quando isso ajuda a caber', () => {
+    // folha 210×297 com margem 5: área útil 200×287; uma imagem 250×100 só cabe de pé
+    const spots = placeNew([{ w: 250, h: 100 }, { w: 250, h: 100 }, { w: 250, h: 100 }], [], page, { margin: 5, gap: 4, allowRotate: true })
+
+    expect(spots.every((s) => !s.overflow)).toBe(true)
+    expect(anyOverlap(boxesOf(spots))).toBe(false)
+  })
+
+  it('não gira quando allowRotate está desligado', () => {
+    const spots = placeNew([{ w: 100, h: 60 }, { w: 100, h: 60 }], [], page, { margin: 5, gap: 4, allowRotate: false })
+
+    expect(spots.every((s) => s.angle === 0)).toBe(true)
+  })
+
+  it('respeita imagens existentes ao compactar as novas', () => {
+    const existing = [obj({ cx: 105, cy: 80, w: 200, h: 140 })]
+    const spots = placeNew(Array.from({ length: 3 }, () => ({ w: 150, h: 150 })), existing, page, { margin: 5, gap: 4 })
+
+    const boxes = [...boxesOf(spots), { x: 5, y: 10, r: 205, b: 150 }]
+
+    expect(spots.every((s) => !s.overflow)).toBe(true)
+    expect(anyOverlap(boxes)).toBe(false)
+  })
+
+  it('imagens pequenas mantêm o tamanho original (escala 100%)', () => {
+    const spots = placeNew([{ w: 40, h: 40 }, { w: 60, h: 30 }], [], page, { margin: 5, gap: 4 })
+
+    expect(spots.every((s) => s.scale === 1)).toBe(true)
+  })
+})
+
 describe('sobreposição que ignora o fundo transparente', () => {
   const a = obj({ id: 'a', cx: 50, cy: 50, w: 40, h: 40 })
 

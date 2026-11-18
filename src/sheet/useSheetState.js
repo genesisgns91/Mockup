@@ -8,6 +8,7 @@ import {
   MARGIN_MAX,
   MARGIN_MIN,
   GAP_MAX,
+  DEFAULT_GAP,
   MAX_ARTS,
   PAPERS,
   ART_PRESETS,
@@ -15,7 +16,7 @@ import {
   getPreset,
   resolveArtSize,
 } from './presets.js'
-import { planSheet, placeArts, effectiveDpi } from './layout.js'
+import { planSheet, placeArts, effectiveDpi, aspectMismatch } from './layout.js'
 import { exportSheetPdf, exportSheetPng, saveBlob } from './exporter.js'
 
 /*
@@ -28,6 +29,7 @@ import { exportSheetPdf, exportSheetPng, saveBlob } from './exporter.js'
 */
 
 const KEY = 'almatie-mockup:sheet:v1'
+const SCHEMA = 3 // muda quando os padrões mudam (as configurações antigas são atualizadas)
 const SHEET_MAX_PX = 6000 // artes grandes (A3 a 300 DPI) precisam de mais pixels
 
 export const SHEET_DEFAULTS = {
@@ -35,11 +37,11 @@ export const SHEET_DEFAULTS = {
   orientation: 'auto', // auto | portrait | landscape
   presetId: DEFAULT_PRESET_ID,
   custom: { w: 210, h: 95 },
-  marginX: 0, // margens laterais
-  marginY: 0, // margens de topo e base
-  gap: 2,
-  fit: 'contain', // contain (arte inteira) | cover (preenche e corta)
-  allowRotate: false,
+  marginX: 3, // margens laterais (padrão de impressão: 3 mm; 0 = arte encostada na borda)
+  marginY: 3, // margens de topo e base
+  gap: DEFAULT_GAP,
+  fit: 'cover', // cover (preenche e corta) | contain (arte inteira) | stretch (estica)
+  allowRotate: true,
   mirror: false,
   sameArt: false,
   dpi: 300,
@@ -69,13 +71,16 @@ function sanitize(raw) {
   }
 
   // versões antigas guardavam uma margem única: vale para os dois
-  const legacy = clampNum(raw.margin, MARGIN_MIN, MARGIN_MAX, 0)
+  const current = raw.schema === SCHEMA
 
-  s.marginX = clampNum(raw.marginX ?? legacy, MARGIN_MIN, MARGIN_MAX, 0)
-  s.marginY = clampNum(raw.marginY ?? legacy, MARGIN_MIN, MARGIN_MAX, 0)
-  s.gap = clampNum(raw.gap, 0, GAP_MAX, 2)
-  s.fit = raw.fit === 'cover' ? 'cover' : 'contain'
-  s.allowRotate = Boolean(raw.allowRotate)
+  // versões antigas recebem os novos padrões (margem de 3 mm em cada lado)
+  s.marginX = current ? clampNum(raw.marginX, MARGIN_MIN, MARGIN_MAX, 3) : 3
+  s.marginY = current ? clampNum(raw.marginY, MARGIN_MIN, MARGIN_MAX, 3) : 3
+  // configurações salvas por versões antigas recebem os novos padrões
+  // (espaço de 1 mm, arte preenchendo a medida e giro automático)
+  s.gap = current ? clampNum(raw.gap, 0, GAP_MAX, DEFAULT_GAP) : DEFAULT_GAP
+  s.fit = current && ['contain', 'cover', 'stretch'].includes(raw.fit) ? raw.fit : 'cover'
+  s.allowRotate = current ? Boolean(raw.allowRotate) : true
   s.mirror = Boolean(raw.mirror)
   s.sameArt = Boolean(raw.sameArt)
   s.dpi = DPI_OPTIONS.includes(raw.dpi) ? raw.dpi : 300
@@ -103,7 +108,8 @@ export function useSheetState() {
   artsRef.current = arts
 
   const update = useCallback((patch) => {
-    setSettings((s) => sanitize({ ...s, ...patch }))
+    // schema atual = já está na versão certa (sem isso, a migração rodaria a cada alteração)
+    setSettings((s) => sanitize({ ...s, ...patch, schema: SCHEMA }))
   }, [])
 
   const reset = useCallback(() => {
@@ -151,7 +157,7 @@ export function useSheetState() {
       allowRotate: settings.allowRotate,
     })
 
-    return !other.invalid && !other.fullSize && other.capacity > plan.capacity ? other : null
+    return !other.invalid && other.capacity > plan.capacity ? other : null
   }, [settings.paper, settings.orientation, settings.marginX, settings.marginY, settings.gap, settings.allowRotate, artSize, plan])
 
   const items = useMemo(() => {
@@ -177,6 +183,21 @@ export function useSheetState() {
       }
     })
   }, [arts, slots, plan, settings.gap, settings.sameArt, settings.fit])
+
+  /*
+    Quanto a proporção das artes enviadas difere da medida escolhida:
+    com margem zero a arte encosta nas bordas, então uma proporção
+    diferente faz sobrar espaço, cortar ou esticar.
+  */
+  const aspect = useMemo(() => {
+    if (!items.length) return null
+
+    const worst = Math.max(
+      ...items.map((i) => aspectMismatch(i.art.w, i.art.h, i.w, i.h, i.rotated))
+    )
+
+    return worst > 0.02 ? { pct: worst, fit: settings.fit } : null
+  }, [items, settings.fit])
 
   const filledCount = useMemo(() => arts.slice(0, slots).filter(Boolean).length, [arts, slots])
 
@@ -261,7 +282,7 @@ export function useSheetState() {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem(KEY, JSON.stringify(settings))
+        localStorage.setItem(KEY, JSON.stringify({ ...settings, schema: SCHEMA }))
       } catch {
         // armazenamento indisponível
       }
@@ -382,6 +403,7 @@ export function useSheetState() {
     artSize,
     plan,
     alt,
+    aspect,
     slots,
     items,
     filledCount,

@@ -74,19 +74,22 @@ async function addImages(count) {
   await waitFor(() => expect(objs().length).toBe(count))
 }
 
-// centro de um objeto na tela (escala do editor: página 210×297 em 900×900 com 40 px de folga)
+// centro de um objeto, em pixels de tela (as imagens são desenhadas direto em pixels)
 function centerOf(index) {
   const el = objs()[index]
-  const left = parseFloat(el.style.left)
-  const top = parseFloat(el.style.top)
-  const w = parseFloat(el.style.width)
-  const h = parseFloat(el.style.height)
 
-  const world = document.querySelector('.dtf-world')
-  const m = /translate\(([-\d.]+)px, ([-\d.]+)px\) scale\(([-\d.]+)\)/.exec(world.style.transform)
-  const [ox, oy, s] = [Number(m[1]), Number(m[2]), Number(m[3])]
+  return {
+    x: parseFloat(el.style.left) + parseFloat(el.style.width) / 2,
+    y: parseFloat(el.style.top) + parseFloat(el.style.height) / 2,
+  }
+}
 
-  return { x: ox + (left + w / 2) * s, y: oy + (top + h / 2) * s, s }
+const mmBox = (index) => {
+  const el = objs()[index]
+  const w = Number(el.dataset.w)
+  const h = Number(el.dataset.h)
+
+  return { x: Number(el.dataset.cx) - w / 2, y: Number(el.dataset.cy) - h / 2, w, h }
 }
 
 const down = (x, y, extra = {}) =>
@@ -107,12 +110,12 @@ describe('Gabarito DTF (desktop)', () => {
     await openDtf()
     await addImages(3)
 
-    const boxes = objs().map((el) => ({
-      x: parseFloat(el.style.left),
-      y: parseFloat(el.style.top),
-      w: parseFloat(el.style.width),
-      h: parseFloat(el.style.height),
-    }))
+    const boxes = objs().map((el) => {
+      const w = Number(el.dataset.w)
+      const h = Number(el.dataset.h)
+
+      return { x: Number(el.dataset.cx) - w / 2, y: Number(el.dataset.cy) - h / 2, w, h }
+    })
 
     // todas dentro da folha (210×297) e sem sobreposição
     for (const b of boxes) {
@@ -209,14 +212,14 @@ describe('Gabarito DTF (desktop)', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /Objeto/ }))
 
     const width = screen.getByText('Largura').closest('label').querySelector('input')
-    const h0 = parseFloat(objs()[0].style.height)
-    const w0 = parseFloat(objs()[0].style.width)
+    const h0 = mmBox(0).h
+    const w0 = mmBox(0).w
 
     fireEvent.change(width, { target: { value: '100' } })
     fireEvent.blur(width)
 
-    await waitFor(() => expect(parseFloat(objs()[0].style.width)).toBeCloseTo(100, 0))
-    expect(parseFloat(objs()[0].style.height)).toBeCloseTo((h0 / w0) * 100, 0)
+    await waitFor(() => expect(mmBox(0).w).toBeCloseTo(100, 0))
+    expect(mmBox(0).h).toBeCloseTo((h0 / w0) * 100, 0)
   })
 
   it('girar 90° pelo painel altera o ângulo', async () => {
@@ -272,9 +275,9 @@ describe('Gabarito DTF (desktop)', () => {
     const x = screen.getByText('X').closest('label').querySelector('input')
     const y = screen.getByText('Y').closest('label').querySelector('input')
 
-    fireEvent.change(x, { target: { value: String(parseFloat(objs()[0].style.left)) } })
+    fireEvent.change(x, { target: { value: String(mmBox(0).x) } })
     fireEvent.blur(x)
-    fireEvent.change(y, { target: { value: String(parseFloat(objs()[0].style.top) + 10) } })
+    fireEvent.change(y, { target: { value: String(mmBox(0).y + 10) } })
     fireEvent.blur(y)
 
     await waitFor(() => expect(document.querySelector('.dtf-chips').textContent).toMatch(/Sobreposição: 1/), { timeout: 3000 })
@@ -350,6 +353,34 @@ describe('Gabarito DTF (desktop)', () => {
 
     expect(localStorage.getItem('almatie-mockup:sheet-mode')).toBe('dtf')
     expect(document.querySelector('.dtf-chips').textContent).toMatch(/A3/)
+  })
+})
+
+describe('Gabarito DTF: nitidez das imagens na tela', () => {
+  it('as imagens são desenhadas em pixels de tela (sem ampliar a folha por CSS)', async () => {
+    await openDtf()
+    await addImages(1)
+
+    // nada de transform:scale na folha: a ampliação por CSS deixava as imagens serrilhadas e embaçadas
+    const world = document.querySelector('.dtf-world')
+
+    expect(world.style.transform).toBe('')
+    expect(world.getAttribute('style') || '').not.toMatch(/scale/)
+
+    // o tamanho em pixels é o tamanho em mm vezes a escala da tela
+    const el = objs()[0]
+    const px = parseFloat(el.style.width)
+    const mm = Number(el.dataset.w)
+
+    expect(px / mm).toBeGreaterThan(1)
+    expect(el.style.transform).toBe('') // sem giro/espelho: sem transform, bordas nítidas
+  })
+
+  it('a imagem usa o arquivo original (a prévia só entra em imagens enormes)', async () => {
+    await openDtf()
+    await addImages(1)
+
+    expect(objs()[0].querySelector('img').getAttribute('src')).toMatch(/^blob:fake-/)
   })
 })
 

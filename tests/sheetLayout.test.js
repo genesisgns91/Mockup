@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { planSheet, placeArts, effectiveDpi } from '../src/sheet/layout.js'
+import { planSheet, placeArts, effectiveDpi, aspectMismatch } from '../src/sheet/layout.js'
 import { ART_PRESETS, resolveArtSize, PAPERS, MAX_ARTS } from '../src/sheet/presets.js'
 
 const mug = { artW: 210, artH: 95 }
@@ -155,11 +155,12 @@ describe('gabarito: margens separadas', () => {
     expect(sides.fullSize).toBe(false)
     expect(sides.scale).toBeCloseTo(190 / 210, 5)
 
-    // só topo/base de 10 mm: a largura continua 210 → tamanho real, mas cabem só 2 de altura 95 (277 mm úteis, 3×95 = 285)
+    // só topo/base de 10 mm: a largura continua 210, mas a altura útil (277 mm) reduz a arte
+    // (277 / 285) em vez de perder uma arte ou mudar o arranjo
     const vertical = planSheet({ paper: 'A4', orientation: 'portrait', marginX: 0, marginY: 10, gap: 0, ...mug })
 
-    expect(vertical.fullSize).toBe(true)
-    expect(vertical.capacity).toBe(2)
+    expect(vertical.capacity).toBe(3)
+    expect(vertical.scale).toBeCloseTo(277 / 285, 5)
   })
 
   it('o atalho "margin" aplica o mesmo valor nos dois eixos', () => {
@@ -190,3 +191,155 @@ describe('gabarito: medidas e resolução', () => {
     expect(effectiveDpi(2480, 1122, 210, 95, false, 'contain')).toBeCloseTo(300, 0)
   })
 })
+
+
+describe('gabarito: aproveitamento máximo da folha (espaço de 1 mm + redução de até 1 mm)', () => {
+  const art = { artW: 210, artH: 95, gap: 1 }
+
+  it('A3 em paisagem comporta 6 artes de 210×95 (2 colunas × 3 linhas)', () => {
+    const plan = planSheet({ paper: 'A3', orientation: 'landscape', ...art })
+
+    expect(plan.capacity).toBe(6)
+    expect(plan.cols).toBe(2)
+    expect(plan.rows).toBe(3)
+  })
+
+  it('a redução necessária para o espaço de 1 mm é pequena (até 1 mm) e sem aviso', () => {
+    const plan = planSheet({ paper: 'A3', orientation: 'landscape', ...art })
+
+    expect(plan.scale).toBeLessThan(1)
+    expect(plan.shrinkMM).toBeGreaterThan(0)
+    expect(plan.shrinkMM).toBeLessThanOrEqual(1 + 1e-9)
+    expect(plan.fullSize).toBe(true)
+  })
+
+  it('com margem zero as artes encostam nas bordas da folha', () => {
+    const plan = planSheet({ paper: 'A3', orientation: 'landscape', ...art })
+    const items = placeArts(plan, 1, 6)
+
+    const left = Math.min(...items.map((i) => i.x))
+    const right = Math.max(...items.map((i) => i.x + i.w))
+    const top = Math.min(...items.map((i) => i.y))
+
+    expect(left).toBeCloseTo(0, 6)
+    expect(right).toBeCloseTo(420, 6)
+    expect(top).toBeCloseTo(0, 6)
+  })
+
+  it('há exatamente 1 mm entre uma arte e outra', () => {
+    const plan = planSheet({ paper: 'A3', orientation: 'landscape', ...art })
+    const items = placeArts(plan, 1, 6)
+    const first = items[0]
+    const second = items[1]
+
+    expect(second.x - (first.x + first.w)).toBeCloseTo(1, 6)
+  })
+
+  it('A3 em retrato girando as artes também comporta 6 (3 colunas × 2 linhas)', () => {
+    const plan = planSheet({ paper: 'A3', orientation: 'portrait', allowRotate: true, ...art })
+
+    expect(plan.capacity).toBe(6)
+    expect(plan.rotated).toBe(true)
+  })
+
+  it('A4 em paisagem girando as artes comporta 3', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'landscape', allowRotate: true, ...art })
+
+    expect(plan.capacity).toBe(3)
+    expect(plan.rotated).toBe(true)
+  })
+
+  it('A4 não passa de 3 artes de 210×95 (a área da folha não permite 4)', () => {
+    for (const orientation of ['auto', 'portrait', 'landscape']) {
+      const plan = planSheet({ paper: 'A4', orientation, allowRotate: true, ...art })
+
+      expect(plan.capacity).toBeLessThanOrEqual(3)
+    }
+  })
+
+  it('no automático escolhe a melhor combinação (A3 → 6) e prefere não girar quando empata', () => {
+    const plan = planSheet({ paper: 'A3', orientation: 'auto', allowRotate: true, ...art })
+
+    expect(plan.capacity).toBe(6)
+    expect(plan.rotated).toBe(false)
+    expect(plan.orientation).toBe('landscape')
+  })
+
+  it('A4 em retrato continua em tamanho real (100%) com 1 mm entre as artes', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', ...art })
+
+    expect(plan.capacity).toBe(3)
+    expect(plan.scale).toBe(1)
+  })
+
+  it('redução maior que 1 mm (margens grandes) continua sendo avisada', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', marginX: 10, ...art })
+
+    expect(plan.fullSize).toBe(false)
+    expect(plan.scale).toBeCloseTo(190 / 210, 5)
+  })
+})
+
+describe('gabarito: proporção da arte e encaixe', () => {
+  it('detecta a diferença de proporção entre a arte e a medida', () => {
+    expect(aspectMismatch(2100, 950, 210, 95, false)).toBeCloseTo(0, 5)
+    expect(aspectMismatch(2070, 1000, 210, 95, false)).toBeGreaterThan(0.05)
+  })
+
+  it('esticar usa o eixo mais esticado para o DPI', () => {
+    const dpi = effectiveDpi(2000, 1000, 210, 95, false, 'stretch')
+
+    expect(dpi).toBeCloseTo(25.4 / Math.max(210 / 2000, 95 / 1000), 4)
+  })
+})
+
+describe('gabarito: a margem reduz a arte sem mudar o arranjo', () => {
+  const art = { artW: 210, artH: 95, gap: 1, allowRotate: true }
+
+  it('em A4, de 0 a 10 mm de margem o arranjo é o mesmo e a largura da arte = 210 − 2 × margem', () => {
+    for (const m of [0, 3, 6, 10]) {
+      const plan = planSheet({ paper: 'A4', orientation: 'auto', marginX: m, marginY: m, ...art })
+      const items = placeArts(plan, 1, plan.slots)
+
+      expect(plan.orientation).toBe('portrait')
+      expect(plan.capacity).toBe(3)
+      expect(plan.rotated).toBe(false)
+      expect(plan.cw).toBeCloseTo(210 - 2 * m, 5)
+
+      // a arte começa na margem (lateral e de topo)
+      expect(items[0].x).toBeCloseTo(m, 5)
+      expect(items[0].y).toBeCloseTo(m, 5)
+    }
+  })
+
+  it('margem 0: arte do tamanho original encostada nas bordas', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'auto', marginX: 0, marginY: 0, ...art })
+
+    expect(plan.scale).toBe(1)
+    expect(placeArts(plan, 1, 1)[0].x).toBeCloseTo(0)
+  })
+
+  it('em A3 as 6 artes continuam 6 em qualquer margem de 0 a 10 mm', () => {
+    for (const m of [0, 3, 10]) {
+      const plan = planSheet({ paper: 'A3', orientation: 'auto', marginX: m, marginY: m, ...art })
+
+      expect(plan.capacity).toBe(6)
+      expect(plan.orientation).toBe('landscape')
+    }
+  })
+
+  it('as margens laterais e de topo/base atuam separadas no tamanho da arte', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', marginX: 10, marginY: 0, ...art })
+
+    expect(plan.cw).toBeCloseTo(190, 5) // limitado pela largura
+    expect(plan.capacity).toBe(3)
+  })
+
+  it('o padrão de impressão: 3 mm em cada lado deixa a arte com 204 × 92,3 mm', () => {
+    const plan = planSheet({ paper: 'A4', orientation: 'portrait', marginX: 3, marginY: 3, ...art })
+
+    expect(plan.cw).toBeCloseTo(204, 5)
+    expect(plan.ch).toBeCloseTo(92.286, 2)
+  })
+})
+

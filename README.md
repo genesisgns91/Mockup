@@ -23,13 +23,14 @@ O site tem **duas ferramentas** (troca no cabeçalho, ou pelo botão de folha na
   (ex.: caneca 210×95 mm → 3 no retrato e 2 na paisagem em A4).
 - Medidas padrão (caneca 325/450 ml, chopp, garrafinha, squeeze) + medida **personalizada**.
   As marcadas "aprox." variam entre fabricantes: ajuste em `src/sheet/presets.js` (`verified`).
-- **Margens de 0 a 10 mm**, reguladas separadamente (laterais · topo e base), espaço entre artes, encaixe (arte inteira ou preenchendo) e giro de 90°.
+- **Máximo aproveitamento:** 1 mm entre as artes; para caber mais, cada arte pode perder até 1 mm (ex.: 6 artes de 210×95 em A3 paisagem) e, por padrão, as artes giram 90° quando isso aumenta a quantidade. Com margem 0 as artes encostam nas bordas (encaixe padrão "Preencher"; também há "Inteira" e "Esticar").
+- **Margens de 0 a 10 mm** (padrão 3 mm), reguladas separadamente (laterais · topo e base). Aumentar a margem **reduz o tamanho da arte** sem mudar o arranjo; em 0 mm a arte encosta nas bordas, no tamanho original, espaço entre artes, encaixe (arte inteira ou preenchendo) e giro de 90°.
 - **Espelhar** a arte (sublimação), repetir a mesma arte em todos os espaços.
 - Exporta **PDF** (página no tamanho exato da folha) e **PNG** (com o DPI gravado), ambos com
   **fundo transparente** e **300 DPI** (ou 600 DPI). Tudo é gerado no navegador, sem enviar nada a servidores.
 
 **Gabarito DTF (folha livre)** — botão "DTF" no topo do gabarito:
-- Insira quantas imagens quiser (várias de uma vez, arrastando ou colando); elas se distribuem sozinhas pela folha A4/A3.
+- Insira quantas imagens quiser (várias de uma vez, arrastando ou colando); elas se distribuem sozinhas pela folha A4/A3 e, se forem grandes demais, são reduzidas juntas, na mesma proporção, até caberem sem se sobrepor.
 - Editor no estilo CorelDRAW: clicar seleciona (respeita as partes transparentes), arrastar move, alças redimensionam
   (cantos mantêm a proporção; Shift = livre), alça de cima gira (Shift = 15° em 15°), guias inteligentes, seleção múltipla,
   trazer para frente/trás, alinhar à folha, duplicar, excluir, zoom e deslocamento (no celular: pinça com dois dedos).

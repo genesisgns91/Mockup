@@ -62,15 +62,24 @@ export function bakeArt(img, cellW, cellH, { rotated = false, mirror = false, fi
 
   const { w: iw, h: ih } = sourceSize(img)
 
-  const scale =
-    fit === 'cover'
-      ? Math.max(frameW / iw, frameH / ih)
-      : Math.min(frameW / iw, frameH / ih)
+  let drawW
+  let drawH
 
-  const drawW = iw * scale
-  const drawH = ih * scale
+  if (fit === 'stretch') {
+    // ocupa toda a medida (pode deformar levemente)
+    drawW = frameW
+    drawH = frameH
+  } else {
+    const scale =
+      fit === 'cover'
+        ? Math.max(frameW / iw, frameH / ih)
+        : Math.min(frameW / iw, frameH / ih)
 
-  const source = scale < 0.5 ? stepDown(img, drawW, drawH) : img
+    drawW = iw * scale
+    drawH = ih * scale
+  }
+
+  const source = Math.min(drawW / iw, drawH / ih) < 0.5 ? stepDown(img, drawW, drawH) : img
 
   ctx.save()
 

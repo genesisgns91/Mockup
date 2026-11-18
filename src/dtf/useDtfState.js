@@ -20,6 +20,7 @@ import {
 import { arrangeAll, placeNew } from './packing.js'
 import { findOverlaps } from './overlap.js'
 import { buildMask } from './masks.js'
+import { makePreview } from './preview.js'
 
 /*
   ==========================================================
@@ -32,7 +33,12 @@ import { buildMask } from './masks.js'
 */
 
 const KEY = 'almatie-mockup:dtf:v1'
-const MAX_PX = 6000
+// lado maior máximo da imagem importada: no computador praticamente não há redução
+// (só acima disso); em celulares o limite de memória do canvas é menor
+const MAX_PX =
+  typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches
+    ? 6000
+    : 12000
 
 export const DTF_DEFAULTS = {
   paper: 'A4',
@@ -105,6 +111,8 @@ export function useDtfState() {
   const [restoring, setRestoring] = useState(true)
 
   const masks = useRef(new Map())
+  const previews = useRef(new Map())
+  const [, setPreviewTick] = useState(0)
   const latest = useRef({})
 
   const page = useMemo(() => pageDims(settings.paper, settings.orientation), [settings.paper, settings.orientation])
@@ -134,6 +142,18 @@ export function useDtfState() {
 
   const selectAll = useCallback(() => setSelected(latest.current.objects.map((o) => o.id)), [])
   const clearSelection = useCallback(() => setSelected([]), [])
+
+  // prévia de alta qualidade para a tela (a exportação usa sempre o arquivo original)
+  const loadPreview = useCallback(async (o) => {
+    const preview = await makePreview(o.img)
+
+    if (preview) {
+      previews.current.set(o.id, preview)
+      setPreviewTick((t) => t + 1)
+    }
+  }, [])
+
+  const previewOf = useCallback((id) => previews.current.get(id) || null, [])
 
   // ---------- inserir imagens ----------
   const addFiles = useCallback(
@@ -198,21 +218,32 @@ export function useDtfState() {
         cy: spots[i].cy,
         w: spots[i].w,
         h: spots[i].h,
-        angle: 0,
+        angle: spots[i].angle || 0,
         flipX: false,
         flipY: false,
         lock: true,
       }))
 
-      for (const o of created) masks.current.set(o.id, buildMask(o.img))
+      for (const o of created) {
+        masks.current.set(o.id, buildMask(o.img))
+        loadPreview(o)
+      }
 
       setObjects((list) => [...list, ...created])
       setSelected(created.map((o) => o.id))
 
       if (spots.some((s) => s.overflow)) {
         toast.warning('Algumas imagens não couberam na folha e ficaram sobrepostas. Reduza-as ou use “Organizar”.')
-      } else if (created.length > 1) {
-        toast.success(`${created.length} imagens distribuídas pela folha.`)
+      } else {
+        const shrunk = spots.some((sp) => sp.scale < 0.995)
+
+        if (created.length > 1) {
+          toast.success(
+            `${created.length} imagens distribuídas pela folha${shrunk ? ' (reduzidas na mesma proporção para caber sem sobrepor)' : ''}.`
+          )
+        } else if (shrunk) {
+          toast.info('A imagem foi reduzida para caber na folha.')
+        }
       }
 
       return created.map((o) => o.id)
@@ -293,6 +324,10 @@ export function useDtfState() {
       const source = latest.current.objects.filter((o) => set.has(o.id))[i]
 
       mask.set(c.id, mask.get(source.id))
+
+      const pv = previews.current.get(source.id)
+
+      if (pv) previews.current.set(c.id, pv)
     })
 
     setObjects((list) => [...list, ...copies])
@@ -537,6 +572,7 @@ export function useDtfState() {
           }
 
           masks.current.set(o.id, buildMask(o.img))
+          loadPreview(o)
           persisted.current[`dtf:${o.id}`] = true
           restored.push(o)
         } catch {
@@ -554,7 +590,7 @@ export function useDtfState() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadPreview])
 
   // ---------- exportação ----------
   const fileName = useCallback(
@@ -649,6 +685,7 @@ export function useDtfState() {
     exportAs,
     fileName,
     maskOf,
+    previewOf,
     restoring,
   }
 }

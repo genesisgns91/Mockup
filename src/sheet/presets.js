@@ -16,6 +16,14 @@ export const GAP_MAX = 10
 export const DPI_OPTIONS = [300, 600]
 
 /*
+  Para caber mais artes, cada arte pode ser reduzida em até 1 mm no lado
+  maior (≈ 0,5%): isso "paga" o espaço de 1 mm entre as artes sem perder
+  uma coluna/linha (ex.: 2 artes de 210 mm na largura de uma A3 = 420 mm).
+*/
+export const SHRINK_TOLERANCE_MM = 1
+export const DEFAULT_GAP = 1
+
+/*
   Medidas padrão de arte (largura × altura, em milímetros).
 
   verified: true  → medida de referência confirmada em fichas/modelos

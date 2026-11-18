@@ -93,7 +93,7 @@ export async function prepareImage(
     const type = blob.type === 'image/jpeg' ? 'image/jpeg' : 'image/png'
 
     const out = await new Promise((resolve) =>
-      canvas.toBlob(resolve, type, 0.92)
+      canvas.toBlob(resolve, type, 0.98)
     )
 
     if (out) {
